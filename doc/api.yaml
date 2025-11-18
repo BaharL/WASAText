@@ -5,7 +5,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8080/v1
 
 security:
   - bearerAuth: []
@@ -66,6 +66,8 @@ paths:
     put:
       tags: [user]
       summary: Update username
+      description: |
+        Change the username of the currently authenticated user.
       operationId: setMyUserName
       requestBody:
         $ref: "#/components/requestBodies/ChangeUsername"
@@ -76,6 +78,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+              examples:
+                ok:
+                  summary: Example updated user
+                  value:
+                    id: 223
+                    username: "bahareh"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "409": { $ref: "#/components/responses/ConflictError" }
@@ -85,12 +93,20 @@ paths:
     get:
       tags: [user]
       summary: List usernames (searchable)
+      description: |
+        Search and list users whose username matches the provided search term.
       operationId: listUsers
       parameters:
         - in: query
           name: search
-          schema: { type: string, example: "mar" }
-          description: Prefix/substring to filter usernames
+          schema:
+            type: string
+            description: Search term for usernames
+            minLength: 1
+            maxLength: 32
+            pattern: "^[a-zA-Z0-9_-]+$"
+            example: "mar"
+          description: Prefix/substring to filter usernames.
       responses:
         "200":
           description: Usernames list
@@ -98,16 +114,31 @@ paths:
             application/json:
               schema:
                 type: object
+                description: List of users matching the search criteria.
                 properties:
                   users:
                     type: array
+                    description: List of matching users.
+                    minItems: 0
+                    maxItems: 1000
                     items: { $ref: "#/components/schemas/User" }
+              examples:
+                ok:
+                  summary: Example list of users
+                  value:
+                    users:
+                      - id: 1
+                        username: "mario"
+                      - id: 2
+                        username: "maria"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
   /users/photo:
     put:
       tags: [media, user]
       summary: Set my profile photo
+      description: |
+        Upload or change the profile photo of the current user.
       operationId: setMyPhoto
       requestBody:
         required: true
@@ -115,14 +146,33 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              description: File payload for the new profile photo.
               required: [file]
               properties:
                 file:
                   type: string
                   format: binary
+                  description: Binary image file for the profile photo.
+                  minLength: 1
+                  maxLength: 10485760
       responses:
-        "204":
-          description: Photo updated
+        "200":
+          description: Photo updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Result of the photo update.
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message.
+                    example: "Photo updated"
+              examples:
+                ok:
+                  summary: Example photo update result
+                  value:
+                    message: "Photo updated"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
@@ -131,6 +181,8 @@ paths:
     get:
       tags: [conversations]
       summary: Get my conversations (reverse chronological)
+      description: |
+        Retrieve the list of conversations for the current user, ordered by most recent activity.
       operationId: getMyConversations
       responses:
         "200":
@@ -139,27 +191,50 @@ paths:
             application/json:
               schema:
                 type: object
+                description: List of conversations belonging to the user.
                 properties:
                   conversations:
                     type: array
+                    description: List of conversation summaries.
+                    minItems: 0
+                    maxItems: 1000
                     items: { $ref: "#/components/schemas/Conversation" }
+              examples:
+                ok:
+                  summary: Example conversations list
+                  value:
+                    conversations:
+                      - id: 134
+                        type: "private"
+                        name: "mario"
+                        photoUrl: "https://example.com/avatar.png"
+                        unreadCount: 2
+                        updatedAt: "2025-11-18T18:30:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
   /conversations/{chatId}:
     get:
       tags: [conversations]
       summary: Get a conversation messages (reverse chronological)
+      description: |
+        Retrieve the messages of a conversation, ordered from newest to oldest, with optional pagination.
       operationId: getConversation
       parameters:
         - $ref: "#/components/parameters/ChatID"
         - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
-          description: Page size
+          description: Page size (maximum number of messages returned).
         - in: query
           name: before
-          schema: { type: string, format: date-time }
-          description: Return messages older than this timestamp
+          schema:
+            type: string
+            format: date-time
+            description: ISO 8601 timestamp; messages older than this time are returned.
+            minLength: 20
+            maxLength: 30
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*$"
+          description: Return messages older than this timestamp.
       responses:
         "200":
           description: Messages of the conversation
@@ -167,10 +242,26 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Page of messages for the given conversation.
                 properties:
                   messages:
                     type: array
+                    description: List of messages.
+                    minItems: 0
+                    maxItems: 500
                     items: { $ref: "#/components/schemas/Message" }
+              examples:
+                ok:
+                  summary: Example conversation messages
+                  value:
+                    messages:
+                      - id: 501
+                        chatId: 134
+                        senderId: 223
+                        kind: "text"
+                        text: "Ciao!"
+                        status: "read"
+                        createdAt: "2025-11-18T18:00:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -178,6 +269,8 @@ paths:
     post:
       tags: [messages]
       summary: Send a message
+      description: |
+        Send a text or media message to a conversation.
       operationId: sendMessage
       requestBody:
         required: true
@@ -191,6 +284,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Message" }
+              examples:
+                ok:
+                  summary: Example created message
+                  value:
+                    id: 600
+                    chatId: 134
+                    senderId: 223
+                    kind: "text"
+                    text: "Hello from WASAText!"
+                    status: "sent"
+                    createdAt: "2025-11-18T19:00:00Z"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -199,6 +303,8 @@ paths:
     post:
       tags: [messages]
       summary: Forward a message to another conversation
+      description: |
+        Create a new message in another conversation by forwarding an existing one.
       operationId: forwardMessage
       parameters:
         - $ref: "#/components/parameters/MessageID"
@@ -208,10 +314,12 @@ paths:
           application/json:
             schema:
               type: object
+              description: Target conversation for the forwarded message.
               required: [toChatId]
               properties:
                 toChatId:
                   type: integer
+                  description: Identifier of the destination conversation.
                   example: 987
       responses:
         "201":
@@ -219,6 +327,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Message" }
+              examples:
+                ok:
+                  summary: Example forwarded message
+                  value:
+                    id: 601
+                    chatId: 987
+                    senderId: 223
+                    kind: "text"
+                    text: "Ciao!"
+                    forwardedFromMessageId: 501
+                    status: "sent"
+                    createdAt: "2025-11-18T19:05:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -226,6 +346,8 @@ paths:
     post:
       tags: [messages]
       summary: Add a reaction (comment) to a message
+      description: |
+        Add an emoji reaction to an existing message.
       operationId: commentMessage
       parameters:
         - $ref: "#/components/parameters/MessageID"
@@ -235,17 +357,29 @@ paths:
           application/json:
             schema:
               type: object
+              description: Emoji reaction to be added.
               required: [emoji]
               properties:
                 emoji:
                   type: string
+                  description: Emoji character to use as a reaction.
                   example: "👍"
+                  pattern: "^.{1,10}$"
+                  minLength: 1
+                  maxLength: 10
       responses:
         "201":
           description: Reaction added
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Reaction" }
+              examples:
+                ok:
+                  summary: Example reaction
+                  value:
+                    emoji: "❤️"
+                    userId: 223
+                    createdAt: "2025-11-18T19:10:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -253,13 +387,20 @@ paths:
     delete:
       tags: [messages]
       summary: Remove a reaction (uncomment)
+      description: |
+        Remove a previously added emoji reaction from a message.
       operationId: uncommentMessage
       parameters:
         - $ref: "#/components/parameters/MessageID"
         - in: path
           name: emoji
           required: true
-          schema: { type: string }
+          description: Emoji reaction to remove from the message.
+          schema:
+            type: string
+            pattern: "^.{1,10}$"
+            minLength: 1
+            maxLength: 10
       responses:
         "204":
           description: Reaction removed
@@ -270,6 +411,8 @@ paths:
     delete:
       tags: [messages]
       summary: Delete a sent message
+      description: |
+        Permanently delete a message previously sent by the current user.
       operationId: deleteMessage
       parameters:
         - $ref: "#/components/parameters/MessageID"
@@ -283,6 +426,8 @@ paths:
     post:
       tags: [groups]
       summary: Create a new group
+      description: |
+        Create a new group conversation with the specified name and initial members.
       operationId: createGroup
       requestBody:
         required: true
@@ -290,23 +435,39 @@ paths:
           application/json:
             schema:
               type: object
+              description: Group details for creation.
               required: [name, memberIds]
               properties:
                 name:
                   type: string
+                  description: Name of the group.
                   minLength: 1
                   maxLength: 64
+                  pattern: "^[\\p{L}0-9 _'-]+$"
                   example: "Amiche Roma"
                 memberIds:
                   type: array
+                  description: Identifiers of the initial members.
                   minItems: 1
-                  items: { type: integer, example: 12 }
+                  maxItems: 100
+                  items:
+                    type: integer
+                    example: 12
       responses:
         "201":
           description: Group created
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Conversation" }
+              examples:
+                ok:
+                  summary: Example created group
+                  value:
+                    id: 200
+                    type: "group"
+                    name: "Amiche Roma"
+                    unreadCount: 0
+                    updatedAt: "2025-11-18T19:20:00Z"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
@@ -314,6 +475,8 @@ paths:
     post:
       tags: [groups]
       summary: Add members to group
+      description: |
+        Add one or more new members to an existing group conversation.
       operationId: addToGroup
       parameters:
         - $ref: "#/components/parameters/ChatID"
@@ -323,12 +486,17 @@ paths:
           application/json:
             schema:
               type: object
+              description: Members to add to the group.
               required: [memberIds]
               properties:
                 memberIds:
                   type: array
+                  description: Identifiers of the users to add.
                   minItems: 1
-                  items: { type: integer, example: 45 }
+                  maxItems: 100
+                  items:
+                    type: integer
+                    example: 45
       responses:
         "204":
           description: Members added
@@ -339,6 +507,8 @@ paths:
     delete:
       tags: [groups]
       summary: Leave group
+      description: |
+        Remove the current user from the specified group conversation.
       operationId: leaveGroup
       parameters:
         - $ref: "#/components/parameters/ChatID"
@@ -352,6 +522,8 @@ paths:
     put:
       tags: [groups]
       summary: Change group name
+      description: |
+        Update the display name of an existing group conversation.
       operationId: setGroupName
       parameters:
         - $ref: "#/components/parameters/ChatID"
@@ -361,16 +533,34 @@ paths:
           application/json:
             schema:
               type: object
+              description: New name for the group.
               required: [name]
               properties:
                 name:
                   type: string
+                  description: New group name.
                   minLength: 1
                   maxLength: 64
+                  pattern: "^[\\p{L}0-9 _'-]+$"
                   example: "Amiche di Roma"
       responses:
-        "204":
-          description: Group name updated
+        "200":
+          description: Group name updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Result of the name update.
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message.
+                    example: "Group name updated"
+              examples:
+                ok:
+                  summary: Example group name update
+                  value:
+                    message: "Group name updated"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -378,6 +568,8 @@ paths:
     put:
       tags: [groups, media]
       summary: Set group photo
+      description: |
+        Upload or change the photo associated with a group conversation.
       operationId: setGroupPhoto
       parameters:
         - $ref: "#/components/parameters/ChatID"
@@ -387,14 +579,33 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              description: File payload for the new group photo.
               required: [file]
               properties:
                 file:
                   type: string
                   format: binary
+                  description: Binary image file for the group photo.
+                  minLength: 1
+                  maxLength: 10485760
       responses:
-        "204":
-          description: Group photo updated
+        "200":
+          description: Group photo updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Result of the photo update.
+                properties:
+                  message:
+                    type: string
+                    description: Confirmation message.
+                    example: "Group photo updated"
+              examples:
+                ok:
+                  summary: Example group photo update
+                  value:
+                    message: "Group photo updated"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -498,8 +709,7 @@ components:
         photoUrl:
           type: string
           format: url
-          nullable: true
-          description: URL of the conversation photo
+          description: URL of the conversation photo, if any.
         lastMessage:
           $ref: "#/components/schemas/Message"
         unreadCount:
@@ -534,22 +744,18 @@ components:
           example: "text"
         text:
           type: string
-          nullable: true
-          description: Text content of the message
+          description: Text content of the message (if kind is text).
           example: "Ciao!"
         mediaUrl:
           type: string
           format: url
-          nullable: true
-          description: URL of the media attached to the message
+          description: URL of the media attached to the message, if any.
         replyToMessageId:
           type: integer
-          nullable: true
-          description: If reply, ID of the original message
+          description: If this message is a reply, ID of the original message.
         forwardedFromMessageId:
           type: integer
-          nullable: true
-          description: If forwarded, ID of the original message
+          description: If this message is forwarded, ID of the original message.
         status:
           type: string
           description: Delivery status
@@ -558,6 +764,8 @@ components:
         reactions:
           type: array
           description: Reactions applied to this message
+          minItems: 0
+          maxItems: 50
           items:
             $ref: "#/components/schemas/Reaction"
         createdAt:
@@ -614,14 +822,16 @@ components:
           example: "text"
         text:
           type: string
-          nullable: true
-          description: Text to send
+          description: Text to send for text messages.
+          pattern: "^.{1,1000}$"
+          minLength: 1
+          maxLength: 1000
           example: "Ciao!"
         mediaUrl:
           type: string
           format: url
-          nullable: true
-          description: URL of the media to send
+          description: URL of the media to send, if any.
+          maxLength: 2048
 
     LoginRequest:
       type: object
