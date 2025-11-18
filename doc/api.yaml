@@ -58,7 +58,7 @@ paths:
                 ok:
                   summary: Example login response
                   value:
-                    identifier: "abc123"
+                    identifier: "550e8400-e29b-41d4-a716-446655440000"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
 
@@ -403,13 +403,14 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+      bearerFormat: JWT
 
   parameters:
     ChatID:
       name: chatId
       in: path
       required: true
-      description: Chat identifier
+      description: Conversation identifier
       schema:
         type: integer
         example: 134
@@ -429,35 +430,35 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
 
     UnauthorizedError:
       description: Invalid or missing bearer token
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
 
     NotFoundError:
       description: Resource not found
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
 
     ConflictError:
-      description: Conflict Error
+      description: Conflict with an existing resource
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
 
     InternalServerError:
-      description: Internal Server Error
+      description: Unexpected server error
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
 
   schemas:
     User:
@@ -466,10 +467,12 @@ components:
       properties:
         id:
           type: integer
+          description: User identifier
           example: 223
           readOnly: true
         username:
           type: string
+          description: Unique username
           minLength: 3
           maxLength: 16
           pattern: "^[a-zA-Z0-9_-]+$"
@@ -477,90 +480,187 @@ components:
 
     Conversation:
       type: object
+      description: Conversation summary
       properties:
-        id: { type: integer, example: 134 }
-        type: { type: string, enum: [private, group], example: "private" }
-        name: { type: string, example: "mario" }
-        photoUrl: { type: string, format: uri, nullable: true }
+        id:
+          type: integer
+          description: Conversation identifier
+          example: 134
+        type:
+          type: string
+          description: Type of conversation
+          enum: [private, group]
+          example: "private"
+        name:
+          type: string
+          description: Display name of the conversation
+          example: "mario"
+        photoUrl:
+          type: string
+          format: url
+          nullable: true
+          description: URL of the conversation photo
         lastMessage:
           $ref: "#/components/schemas/Message"
-        unreadCount: { type: integer, example: 2 }
-        updatedAt: { type: string, format: date-time }
+        unreadCount:
+          type: integer
+          description: Number of unread messages
+          example: 2
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
 
     Message:
       type: object
+      description: Message in a conversation
       properties:
-        id: { type: integer, example: 501 }
-        chatId: { type: integer, example: 134 }
-        senderId: { type: integer, example: 223 }
-        kind: { type: string, enum: [text, gif, image], example: "text" }
-        text: { type: string, nullable: true, example: "Ciao!" }
-        mediaUrl: { type: string, format: uri, nullable: true }
-        replyToMessageId: { type: integer, nullable: true }
-        forwardedFromMessageId: { type: integer, nullable: true }
-        status: { type: string, enum: [sent, received, read], example: "read" }
+        id:
+          type: integer
+          description: Message identifier
+          example: 501
+        chatId:
+          type: integer
+          description: Conversation identifier
+          example: 134
+        senderId:
+          type: integer
+          description: Sender user identifier
+          example: 223
+        kind:
+          type: string
+          description: Kind of message
+          enum: [text, gif, image]
+          example: "text"
+        text:
+          type: string
+          nullable: true
+          description: Text content of the message
+          example: "Ciao!"
+        mediaUrl:
+          type: string
+          format: url
+          nullable: true
+          description: URL of the media attached to the message
+        replyToMessageId:
+          type: integer
+          nullable: true
+          description: If reply, ID of the original message
+        forwardedFromMessageId:
+          type: integer
+          nullable: true
+          description: If forwarded, ID of the original message
+        status:
+          type: string
+          description: Delivery status
+          enum: [sent, received, read]
+          example: "read"
         reactions:
           type: array
-          items: { $ref: "#/components/schemas/Reaction" }
-        createdAt: { type: string, format: date-time }
-    
+          description: Reactions applied to this message
+          items:
+            $ref: "#/components/schemas/Reaction"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    Reaction:
+      type: object
+      description: Reaction to a message
+      properties:
+        emoji:
+          type: string
+          description: Emoji representing the reaction
+          example: "❤️"
+        userId:
+          type: integer
+          description: User that reacted
+          example: 223
+        createdAt:
+          type: string
+          format: date-time
+          description: Reaction timestamp
+
     Error:
       type: object
       description: Generic error response
       properties:
         code:
           type: string
+          description: Application error code
           example: "BAD_REQUEST"
         message:
           type: string
+          description: Human readable error message
           example: "Invalid request data"
       required:
         - code
         - message
 
-    Reaction:
-      type: object
-      properties:
-        emoji: { type: string, example: "❤️" }
-        userId: { type: integer, example: 223 }
-        createdAt: { type: string, format: date-time }
-
     SendMessageRequest:
       type: object
+      description: Request body to send a message
       required: [chatId, kind]
       properties:
-        chatId: { type: integer, example: 134 }
-        kind: { type: string, enum: [text, gif, image], example: "text" }
-        text: { type: string, nullable: true, example: "Ciao!" }
-        mediaUrl: { type: string, format: uri, nullable: true }
+        chatId:
+          type: integer
+          description: Conversation identifier
+          example: 134
+        kind:
+          type: string
+          description: Kind of message
+          enum: [text, gif, image]
+          example: "text"
+        text:
+          type: string
+          nullable: true
+          description: Text to send
+          example: "Ciao!"
+        mediaUrl:
+          type: string
+          format: url
+          nullable: true
+          description: URL of the media to send
 
     LoginRequest:
       type: object
+      description: Login request body
       required: [name]
       properties:
         name:
           type: string
+          description: Name of the user
           minLength: 3
           maxLength: 16
+          pattern: "^[a-zA-Z0-9_]+$"
           example: "Maria"
 
     LoginResponse:
       type: object
+      description: Login response body
       properties:
         identifier:
           type: string
-          example: "abc123"
+          format: uuid
+          description: Identifier for the logged-in user
+          example: "550e8400-e29b-41d4-a716-446655440000"
 
   requestBodies:
     ChangeUsername:
+      description: Request body to change the username
+      required: true
       content:
         application/json:
           schema:
             type: object
+            description: New username
             required: [username]
             properties:
               username:
                 type: string
+                description: New username to be set
                 minLength: 3
                 maxLength: 16
+                pattern: "^[a-zA-Z0-9_-]+$"
                 example: "mario"
