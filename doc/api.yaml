@@ -426,14 +426,38 @@ components:
   responses:
     BadRequestError:
       description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
     UnauthorizedError:
       description: Invalid or missing bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
     NotFoundError:
       description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
     ConflictError:
       description: Conflict Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
     InternalServerError:
       description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
 
   schemas:
     User:
@@ -479,6 +503,20 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Reaction" }
         createdAt: { type: string, format: date-time }
+    
+    Error:
+      type: object
+      description: Generic error response
+      properties:
+        code:
+          type: string
+          example: "BAD_REQUEST"
+        message:
+          type: string
+          example: "Invalid request data"
+      required:
+        - code
+        - message
 
     Reaction:
       type: object
