@@ -39,20 +39,16 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	// Here we must interact with the database.
-	// Idea:
-	//   - If the user already exists → return the existing identifier
-	//   - If the user does NOT exist → create a new one and return the new identifier
-	//
-	// This method (LoginOrCreateUser) will be implemented later inside service/database.
+	// Interact with the database:
+	// - if user exists → return existing identifier
+	// - else create user and return new identifier
 	identifier, err := rt.db.LoginOrCreateUser(r.Context(), req.Name)
 	if err != nil {
-		// Later we can define specific error types (e.g., ErrConflict, ErrBadRequest)
 		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// According to the OpenAPI spec (api.yaml), this endpoint must return HTTP 201
+	// According to the OpenAPI spec (api.yaml), this endpoint returns HTTP 201
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
@@ -62,5 +58,7 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.
 
 	// Encode the response as JSON
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		// In case encoding fails, return 500 (also log later)
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerErr
+		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+}
