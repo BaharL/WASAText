@@ -1,46 +1,26 @@
-/*
-Package database is the middleware between the app database and the code. All data (de)serialization (save/load) from a
-persistent database are handled here. Database specific logic should never escape this package.
-
-To use this package you need to apply migrations to the database if needed/wanted, connect to it (using the database
-data source name from config), and then initialize an instance of AppDatabase from the DB connection.
-
-For example, this code adds a parameter in `webapi` executable for the database data source name (add it to the
-main.WebAPIConfiguration structure):
-
-	DB struct {
-		Filename string `conf:""`
-	}
-
-This is an example on how to migrate the DB and connect to it:
-
-	// Start Database
-	logger.Println("initializing database support")
-	db, err := sql.Open("sqlite3", "./foo.db")
-	if err != nil {
-		logger.WithError(err).Error("error opening SQLite DB")
-		return fmt.Errorf("opening SQLite: %w", err)
-	}
-	defer func() {
-		logger.Debug("database stopping")
-		_ = db.Close()
-	}()
-
-Then you can initialize the AppDatabase and pass it to the api package.
-*/
 package database
 
+// Package database is the middleware between the app and the persistent storage.
+// All data (de)serialization to/from the SQL database is handled here.
+
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 )
 
-// AppDatabase is the high level interface for the DB
+// AppDatabase is the high level interface for the DB used by the rest of the app.
 type AppDatabase interface {
+	// Example functions from the template (still available if you want to use them).
 	GetName() (string, error)
 	SetName(name string) error
 
+	// LoginOrCreateUser: if a user with the given name exists, it returns its identifier.
+	// Otherwise, it creates a new user and returns the new identifier.
+	LoginOrCreateUser(ctx context.Context, name string) (string, error)
+
+	// Ping checks that the DB connection is still alive.
 	Ping() error
 }
 
@@ -52,18 +32,29 @@ type appdbimpl struct {
 // `db` is required - an error will be returned if `db` is `nil`.
 func New(db *sql.DB) (AppDatabase, error) {
 	if db == nil {
-		return nil, errors.New("database is required when building a AppDatabase")
+		return nil, errors.New("database is required when building an AppDatabase")
 	}
 
-	// Check if table exists. If not, the database is empty, and we need to create the structure
+	// Keep the example table from the original template (optional, but harmless).
 	var tableName string
 	err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='example_table';`).Scan(&tableName)
 	if errors.Is(err, sql.ErrNoRows) {
 		sqlStmt := `CREATE TABLE example_table (id INTEGER NOT NULL PRIMARY KEY, name TEXT);`
 		_, err = db.Exec(sqlStmt)
 		if err != nil {
-			return nil, fmt.Errorf("error creating database structure: %w", err)
+			return nil, fmt.Errorf("error creating example_table structure: %w", err)
 		}
+	}
+
+	// Create the "users" table if it does not exist.
+	usersStmt := `
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT UNIQUE NOT NULL,
+		identifier TEXT UNIQUE NOT NULL
+	);`
+	if _, err := db.Exec(usersStmt); err != nil {
+		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
 
 	return &appdbimpl{
