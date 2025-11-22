@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid"
 )
 
 // LoginOrCreateUser handles user login/creation.
@@ -29,7 +29,11 @@ func (db *appdbimpl) LoginOrCreateUser(ctx context.Context, name string) (string
 	}
 
 	// 2. User does not exist → create a new one.
-	newID := uuid.New().String()
+	id, err := uuid.NewV4()
+	if err != nil {
+		return "", fmt.Errorf("cannot generate uuid: %w", err)
+	}
+	newID := id.String()
 
 	_, err = db.c.ExecContext(ctx, `
 		INSERT INTO users (name, identifier) VALUES (?, ?)
