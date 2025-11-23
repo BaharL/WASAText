@@ -1,11 +1,13 @@
 package api
 
 import (
+	"net/http"
+	"strings"
+
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
 // httpRouterHandler is the signature for functions that accepts a reqcontext.RequestContext in addition to those
@@ -21,6 +23,7 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		var ctx = reqcontext.RequestContext{
 			ReqUUID: reqUUID,
 		}
@@ -30,6 +33,12 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			"reqid":     ctx.ReqUUID.String(),
 			"remote-ip": r.RemoteAddr,
 		})
+
+		// Extract authenticated user identifier from Authorization: Bearer <token>
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			ctx.UserIdentifier = strings.TrimSpace(authHeader[len("Bearer "):])
+		}
 
 		// Call the next handler in chain (usually, the handler function for the path)
 		fn(w, r, ps, ctx)
