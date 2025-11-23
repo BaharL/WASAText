@@ -7,19 +7,21 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// LoginRequest matches the request body defined in api.yaml.
+// LoginRequest mirrors the request body defined in api.yaml.
 type LoginRequest struct {
 	Name string `json:"name"`
 }
 
-// LoginResponse matches the response body defined in api.yaml.
+// LoginResponse mirrors the response body defined in api.yaml.
 type LoginResponse struct {
 	Identifier string `json:"identifier"`
 }
 
-// doLogin implements POST /session.
+// doLogin handles POST /session.
+// It logs in an existing user or creates a new one.
+// This is the only public endpoint (no authentication required).
 func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Only POST method is allowed.
+	// Enforce POST method (safety check).
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"message":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -32,7 +34,7 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	// Simple validation for the "name" field.
+	// Basic validation for the "name" field.
 	if len(req.Name) < 3 || len(req.Name) > 16 {
 		http.Error(w, `{"message":"name must be between 3 and 16 characters"}`, http.StatusBadRequest)
 		return
@@ -47,13 +49,14 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	// According to the OpenAPI spec this endpoint returns HTTP 201.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
+	// Build response.
 	resp := LoginResponse{
 		Identifier: identifier,
 	}
+
+	// According to the OpenAPI spec this endpoint returns HTTP 201.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 
 	// Encode the response as JSON.
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
