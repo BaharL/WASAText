@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/gofrs/uuid"
@@ -23,7 +24,7 @@ func (db *appdbimpl) LoginOrCreateUser(ctx context.Context, name string) (string
 		return identifier, nil
 	}
 
-	if err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		// Unexpected DB error.
 		return "", fmt.Errorf("query error: %w", err)
 	}
