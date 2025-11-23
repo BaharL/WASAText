@@ -4,18 +4,33 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"github.com/julienschmidt/httprouter"
 )
+
+//
+// Request / response models
+//
 
 // changeUsernameRequest represents the JSON body used to update a username.
 type changeUsernameRequest struct {
 	Username string `json:"username"`
 }
 
+// userSummary is the minimal representation of a user returned by /users.
+type userSummary struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+}
+
 // usernameRegexp validates allowed usernames (3–16 chars, letters/numbers/_/-).
 var usernameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,16}$`)
+
+//
+// Handlers
+//
 
 // setMyUserName handles PUT /users/username.
 // It updates the authenticated user's username in the database.
@@ -56,16 +71,44 @@ func (rt *_router) setMyUserName(
 }
 
 // listUsers handles GET /users.
-// This will return the list of users matching the 'search' query parameter.
-// (Da implementare più avanti, HW3)
+// It returns the list of users matching the 'search' query parameter.
 func (rt *_router) listUsers(
 	w http.ResponseWriter,
 	r *http.Request,
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	_ = ctx
-	w.WriteHeader(http.StatusNotImplemented)
+	// Leggo il parametro ?search=...
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	if search == "" {
+		// Scelta semplice: se non c'è search, ritorniamo lista vuota.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]userSummary{})
+		return
+	}
+
+	// Chiamo il database
+	users, err := rt.db.SearchUsers(r.Context(), search)
+	if err != nil {
+		ctx.Logger.WithError(err).Error("cannot search users")
+		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Mappo i risultati in userSummary (solo id + username)
+	resp := make([]userSummary, 0, len(users))
+	for _, u := range users {
+		resp = append(resp, userSummary{
+			ID:       u.ID,
+			Username: u.Name,
+		})
+	}
+
+	// Rispondo con JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // setMyPhoto handles PUT /users/photo.
