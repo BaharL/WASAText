@@ -26,7 +26,6 @@ type AppDatabase interface {
 	Ping() error
 }
 
->>>>>>> dcf2982 (Add user search DB method and listUsers handler)
 type appdbimpl struct {
 	c *sql.DB
 }
