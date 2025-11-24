@@ -12,22 +12,21 @@ import (
 
 // AppDatabase is the high level interface for the DB used by the rest of the app.
 type AppDatabase interface {
-    // LoginOrCreateUser: if a user with the given name exists, it returns its identifier.
-    // Otherwise, it creates a new user and returns the new identifier.
-    LoginOrCreateUser(ctx context.Context, name string) (string, error)
+	// LoginOrCreateUser: if a user with the given name exists, it returns its identifier.
+	// Otherwise, it creates a new user and returns the new identifier.
+	LoginOrCreateUser(ctx context.Context, name string) (string, error)
 
-    // SetUserName updates the user's name given their identifier.
-    SetUserName(ctx context.Context, identifier string, newName string) error
+	// SetUserName updates the user's name given their identifier.
+	SetUserName(ctx context.Context, identifier string, newName string) error
 
-    // Search users by name (prefix / like)
-    SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
+	// Search users by name (prefix / like)
+	SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
 
-    // Ping checks that the DB connection is still alive.
-    Ping() error
+	// Ping checks that the DB connection is still alive.
+	Ping() error
 }
 
-
-
+>>>>>>> dcf2982 (Add user search DB method and listUsers handler)
 type appdbimpl struct {
 	c *sql.DB
 }
