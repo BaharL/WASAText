@@ -5,17 +5,17 @@ import (
 	"fmt"
 )
 
-// UserSearchResult is a minimal user view used for search results.
-type UserSearchResult struct {
-	ID   int64
-	Name string
+// SearchUserResult is a minimal user view used for search results.
+type SearchUserResult struct {
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
 }
 
 // SearchUsers returns all users whose name contains the given `search` substring.
 // The search is case-sensitive according to SQLite collation (per ora va benissimo così).
-func (db *appdbimpl) SearchUsers(ctx context.Context, search string) ([]UserSearchResult, error) {
+func (db *appdbimpl) SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error) {
 	rows, err := db.c.QueryContext(ctx, `
-		SELECT id, name
+		SELECT identifier, name
 		FROM users
 		WHERE name LIKE '%' || ? || '%'
 		ORDER BY name ASC
@@ -25,11 +25,11 @@ func (db *appdbimpl) SearchUsers(ctx context.Context, search string) ([]UserSear
 	}
 	defer rows.Close()
 
-	var results []UserSearchResult
+	var results []SearchUserResult
 
 	for rows.Next() {
-		var u UserSearchResult
-		if err := rows.Scan(&u.ID, &u.Name); err != nil {
+		var u SearchUserResult
+		if err := rows.Scan(&u.Identifier, &u.Name); err != nil {
 			return nil, fmt.Errorf("cannot scan user row: %w", err)
 		}
 		results = append(results, u)
