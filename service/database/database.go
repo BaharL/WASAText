@@ -30,6 +30,12 @@ type appdbimpl struct {
 	c *sql.DB
 }
 
+// SearchUserResult rappresenta un singolo utente trovato dalla ricerca.
+type SearchUserResult struct {
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+}
+
 // New returns a new instance of AppDatabase based on the SQLite connection `db`.
 // `db` is required - an error will be returned if `db` is `nil`.
 func New(db *sql.DB) (AppDatabase, error) {
@@ -66,4 +72,34 @@ func New(db *sql.DB) (AppDatabase, error) {
 
 func (db *appdbimpl) Ping() error {
 	return db.c.Ping()
+}
+
+// SearchUsers cerca gli utenti per nome usando una ricerca tipo prefisso.
+func (db *appdbimpl) SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error) {
+	rows, err := db.c.QueryContext(ctx, `
+		SELECT identifier, name
+		FROM users
+		WHERE name LIKE ? || '%'
+		ORDER BY name ASC
+	`, search)
+	if err != nil {
+		return nil, fmt.Errorf("error searching users: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchUserResult
+
+	for rows.Next() {
+		var r SearchUserResult
+		if err := rows.Scan(&r.Identifier, &r.Name); err != nil {
+			return nil, fmt.Errorf("error scanning search result row: %w", err)
+		}
+		results = append(results, r)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error while searching users: %w", err)
+	}
+
+	return results, nil
 }
