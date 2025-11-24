@@ -19,10 +19,9 @@ type changeUsernameRequest struct {
 	Username string `json:"username"`
 }
 
-// userSummary is the minimal representation of a user returned by /users.
 type userSummary struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
+	Identifier string `json:"identifier"`
+	Username   string `json:"username"`
 }
 
 // usernameRegexp validates allowed usernames (3–16 chars, letters/numbers/_/-).
@@ -100,7 +99,7 @@ func (rt *_router) listUsers(
 	resp := make([]userSummary, 0, len(users))
 	for _, u := range users {
 		resp = append(resp, userSummary{
-			ID:       u.ID,
+			Identifier: u.Identifier,
 			Username: u.Name,
 		})
 	}
