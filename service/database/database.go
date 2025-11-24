@@ -19,9 +19,13 @@ type AppDatabase interface {
     // SetUserName updates the user's name given their identifier.
     SetUserName(ctx context.Context, identifier string, newName string) error
 
+    // Search users by name (prefix / like)
+    SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
+
     // Ping checks that the DB connection is still alive.
     Ping() error
 }
+
 
 
 type appdbimpl struct {
