@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-// Message rappresenta un messaggio come nello schema OpenAPI.
+// Message represents a message as defined in the OpenAPI schema.
 type Message struct {
 	ID                     int64   `json:"id"`
 	ChatID                 int64   `json:"chatId"`
@@ -21,14 +21,15 @@ type Message struct {
 	CreatedAt              string  `json:"createdAt"`
 }
 
-// Reaction rappresenta una reazione a un messaggio.
+// Reaction represents a reaction to a message.
 type Reaction struct {
 	Emoji     string `json:"emoji"`
 	UserID    int64  `json:"userId"`
 	CreatedAt string `json:"createdAt"`
 }
 
-// initMessageTables crea le tabelle messages e message_reactions se non esistono.
+// initMessageTables creates the messages and message_reactions
+// tables if they do not already exist.
 func initMessageTables(db *sql.DB) error {
 	msgStmt := `
 	CREATE TABLE IF NOT EXISTS messages (
@@ -62,7 +63,8 @@ func initMessageTables(db *sql.DB) error {
 	return nil
 }
 
-// getUserIDByIdentifier converte l'identifier (UUID stringa) nell'id numerico interno.
+// getUserIDByIdentifier converts a user identifier (UUID string)
+// into the internal numeric user ID.
 func (db *appdbimpl) getUserIDByIdentifier(ctx context.Context, identifier string) (int64, error) {
 	var id int64
 	err := db.c.QueryRowContext(ctx, `
@@ -77,7 +79,7 @@ func (db *appdbimpl) getUserIDByIdentifier(ctx context.Context, identifier strin
 	return id, nil
 }
 
-// helper per fare SELECT di un singolo messaggio per id.
+// getMessageByID loads a single message by its ID.
 func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, error) {
 	var m Message
 	var text, mediaURL sql.NullString
@@ -123,7 +125,7 @@ func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, err
 	return m, nil
 }
 
-// SendMessage crea un nuovo messaggio (POST /messages).
+// SendMessage creates a new message (POST /messages).
 func (db *appdbimpl) SendMessage(
 	ctx context.Context,
 	senderIdentifier string,
@@ -132,13 +134,14 @@ func (db *appdbimpl) SendMessage(
 	text *string,
 	mediaURL *string,
 ) (Message, error) {
-	// 1. Trovo l'id numerico dell'utente.
+
+	// 1. Retrieve the numeric user ID.
 	senderID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Message{}, err
 	}
 
-	// 2. Inserisco il messaggio.
+	// 2. Insert the message.
 	res, err := db.c.ExecContext(ctx, `
 		INSERT INTO messages (
 			chat_id, sender_id, kind, text, media_url, status
@@ -159,24 +162,25 @@ func (db *appdbimpl) SendMessage(
 		return Message{}, fmt.Errorf("cannot get last insert id: %w", err)
 	}
 
-	// 3. Rileggo il messaggio completo.
+	// 3. Reload and return the full message.
 	return db.getMessageByID(ctx, msgID)
 }
 
-// ForwardMessage inoltra un messaggio esistente in un'altra chat.
+// ForwardMessage forwards an existing message into another chat.
 func (db *appdbimpl) ForwardMessage(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	toChatID int64,
 ) (Message, error) {
-	// 1. Recupero il messaggio originale.
+
+	// 1. Load the original message.
 	orig, err := db.getMessageByID(ctx, messageID)
 	if err != nil {
 		return Message{}, err
 	}
 
-	// 2. Campo forwarded_from = id del messaggio originale.
+	// 2. Insert the forwarded message.
 	senderID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Message{}, err
@@ -207,19 +211,20 @@ func (db *appdbimpl) ForwardMessage(
 	return db.getMessageByID(ctx, newID)
 }
 
-// AddReaction aggiunge una reazione a un messaggio.
+// AddReaction registers a reaction on a message.
 func (db *appdbimpl) AddReaction(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	emoji string,
 ) (Reaction, error) {
+
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Reaction{}, err
 	}
 
-	// Inserisco la reazione; se esiste già, la sovrascrivo.
+	// Insert or overwrite the reaction.
 	_, err = db.c.ExecContext(ctx, `
 		INSERT OR REPLACE INTO message_reactions (
 			message_id, user_id, emoji, created_at
@@ -242,13 +247,14 @@ func (db *appdbimpl) AddReaction(
 	return r, nil
 }
 
-// RemoveReaction rimuove una reazione da un messaggio.
+// RemoveReaction deletes a reaction from a message.
 func (db *appdbimpl) RemoveReaction(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	emoji string,
 ) error {
+
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return err
@@ -266,15 +272,17 @@ func (db *appdbimpl) RemoveReaction(
 	if err == nil && affected == 0 {
 		return sql.ErrNoRows
 	}
+
 	return err
 }
 
-// DeleteMessage cancella un messaggio inviato dall'utente corrente.
+// DeleteMessage deletes a message sent by the authenticated user.
 func (db *appdbimpl) DeleteMessage(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 ) error {
+
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return err
@@ -292,10 +300,11 @@ func (db *appdbimpl) DeleteMessage(
 	if err == nil && affected == 0 {
 		return sql.ErrNoRows
 	}
+
 	return err
 }
 
-// textOrNil aiuta a passare valori NULL al DB quando text/mediaUrl sono nil.
+// textOrNil helps passing NULL to the DB when text/mediaURL are nil.
 func textOrNil(s *string) interface{} {
 	if s == nil {
 		return nil
