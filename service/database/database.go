@@ -63,6 +63,13 @@ type AppDatabase interface {
 	ListUserConversations(ctx context.Context, userIdentifier string) ([]ConversationSummary, error)
 	ListConversationMessages(ctx context.Context, userIdentifier string, conversationID int64) ([]Message, error)
 
+	// Group operations
+	CreateGroup(ctx context.Context, ownerIdentifier string, name string, memberIdentifiers []string) (int64, error)
+	AddMembersToGroup(ctx context.Context, requesterIdentifier string, chatID int64, memberIdentifiers []string) error
+	LeaveGroup(ctx context.Context, requesterIdentifier string, chatID int64) error
+	SetGroupName(ctx context.Context, requesterIdentifier string, chatID int64, newName string) error
+	SetGroupPhoto(ctx context.Context, requesterIdentifier string, chatID int64, photoURL string) error
+
 	// Ping checks that the DB connection is still alive.
 	Ping() error
 }
