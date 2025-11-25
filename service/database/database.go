@@ -106,7 +106,7 @@ func New(db *sql.DB) (AppDatabase, error) {
 	if _, err := db.Exec(usersStmt); err != nil {
 		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
-	
+
 	// Create tables for messages and reactions.
 	if err := initMessageTables(db); err != nil {
 		return nil, fmt.Errorf("error creating message tables: %w", err)
@@ -122,7 +122,7 @@ func New(db *sql.DB) (AppDatabase, error) {
 	);`
 
 	if _, err := db.Exec(convStmt); err != nil {
-	    return nil, fmt.Errorf("error creating conversations table: %w", err)
+		return nil, fmt.Errorf("error creating conversations table: %w", err)
 	}
 
 	// Conversation members
@@ -133,9 +133,8 @@ func New(db *sql.DB) (AppDatabase, error) {
 	    PRIMARY KEY (conversation_id, user_id)
 	);`
 	if _, err := db.Exec(membersStmt); err != nil {
-	    return nil, fmt.Errorf("error creating conversation_members table: %w", err)
+		return nil, fmt.Errorf("error creating conversation_members table: %w", err)
 	}
-
 
 	return &appdbimpl{
 		c: db,

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-  "strings"
+	"strings"
 )
 
 // CreateGroup creates a new group conversation and adds the owner plus
@@ -26,7 +26,10 @@ func (db *appdbimpl) CreateGroup(
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	// 1) Insert into conversations.
 	res, err := tx.ExecContext(ctx, `
