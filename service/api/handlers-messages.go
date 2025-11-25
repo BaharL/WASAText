@@ -66,12 +66,10 @@ func (rt *_router) sendMessage(
 		}
 		// For safety, mediaUrl must be empty
 		req.MediaURL = nil
-	} else {
+	} else if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
 		// gif / image → mediaUrl is required
-		if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
-			http.Error(w, `{"message":"mediaUrl is required for gif/image messages"}`, http.StatusBadRequest)
-			return
-		}
+		http.Error(w, `{"message":"mediaUrl is required for gif/image messages"}`, http.StatusBadRequest)
+		return
 	}
 
 	msg, err := rt.db.SendMessage(
