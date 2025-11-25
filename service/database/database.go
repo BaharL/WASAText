@@ -112,14 +112,15 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating message tables: %w", err)
 	}
 
-	// Conversations table
 	convStmt := `
 	CREATE TABLE IF NOT EXISTS conversations (
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    type TEXT NOT NULL,
 	    name TEXT,
+	    photo_url TEXT,
 	    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`
+
 	if _, err := db.Exec(convStmt); err != nil {
 	    return nil, fmt.Errorf("error creating conversations table: %w", err)
 	}
