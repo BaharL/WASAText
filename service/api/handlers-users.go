@@ -100,7 +100,7 @@ func (rt *_router) listUsers(
 	for _, u := range users {
 		resp = append(resp, userSummary{
 			Identifier: u.Identifier,
-			Username: u.Name,
+			Username:   u.Name,
 		})
 	}
 
