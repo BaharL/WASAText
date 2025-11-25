@@ -22,8 +22,8 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.PUT("/users/photo", rt.wrap(rt.setMyPhoto))
 
 	// --- CONVERSATIONS ---
-	rt.router.GET("/conversations", rt.wrap(rt.getMyConversations))
-	rt.router.GET("/conversations/:chatId", rt.wrap(rt.getConversation))
+	rt.router.GET("/conversations", rt.wrap(rt.listMyConversations))
+	rt.router.GET("/conversations/:conversationId/messages", rt.wrap(rt.listConversationMessages))
 
 	// --- MESSAGES ---
 	rt.router.POST("/messages", rt.wrap(rt.sendMessage))
