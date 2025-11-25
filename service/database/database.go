@@ -105,10 +105,46 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating message tables: %w", err)
 	}
 
+	// Conversations table
+	convStmt := `
+	CREATE TABLE IF NOT EXISTS conversations (
+	    id INTEGER PRIMARY KEY AUTOINCREMENT,
+	    type TEXT NOT NULL,
+	    name TEXT,
+	    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`
+	if _, err := db.Exec(convStmt); err != nil {
+	    return nil, fmt.Errorf("error creating conversations table: %w", err)
+	}
+
+	// Conversation members
+	membersStmt := `
+	CREATE TABLE IF NOT EXISTS conversation_members (
+	    conversation_id INTEGER NOT NULL,
+	    user_id INTEGER NOT NULL,
+	    PRIMARY KEY (conversation_id, user_id)
+	);`
+	if _, err := db.Exec(membersStmt); err != nil {
+	    return nil, fmt.Errorf("error creating conversation_members table: %w", err)
+	}
+
+
 	return &appdbimpl{
 		c: db,
 	}, nil
 }
+
+func (db *appdbimpl) GetUserConversations(ctx context.Context, userID int64) ([]Conversation, error) {
+    rows, err := db.c.QueryContext(ctx, `
+        SELECT c.id, c.type, c.name, datetime(c.created_at)
+        FROM conversations c
+        JOIN conversation_members m ON c.id = m.conversation_id
+        WHERE m.user_id = ?
+        ORDER BY c.created_at DESC
+    `, userID)
+    ...
+}
+
 
 func (db *appdbimpl) Ping() error {
 	return db.c.Ping()
