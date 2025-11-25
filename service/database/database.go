@@ -59,6 +59,10 @@ type AppDatabase interface {
 		messageID int64,
 	) error
 
+	// Conversation / chat visualization
+	ListUserConversations(ctx context.Context, userIdentifier string) ([]ConversationSummary, error)
+	ListConversationMessages(ctx context.Context, userIdentifier string, conversationID int64) ([]Message, error)
+
 	// Ping checks that the DB connection is still alive.
 	Ping() error
 }
