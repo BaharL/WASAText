@@ -7,92 +7,97 @@ import (
 	"fmt"
 )
 
-// ConversationSummary represents a single conversation item
-// returned by GET /conversations.
+// ConversationSummary è il modello restituito da GET /conversations.
 type ConversationSummary struct {
 	ID          int64    `json:"id"`
 	Title       string   `json:"title"`
 	LastMessage *Message `json:"lastMessage,omitempty"`
 }
 
-// ListUserConversations returns the list of conversations
-// in which the given user has sent at least one message.
+// ListUserConversations restituisce tutte le conversazioni a cui partecipa l’utente,
+// con l’ultimo messaggio (se presente).
 func (db *appdbimpl) ListUserConversations(
 	ctx context.Context,
 	userIdentifier string,
 ) ([]ConversationSummary, error) {
-
-	// 1) Resolve the numeric user ID from the identifier.
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2) For now, we define a "conversation" as a chat_id where
-	// this user has sent at least one message. We get the last
-	// message id for each chat.
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
-			m.chat_id,
+			c.id,
+			COALESCE(c.name, printf('Chat %d', c.id)) AS title,
 			MAX(m.id) AS last_message_id
-		FROM messages m
-		WHERE m.sender_id = ?
-		GROUP BY m.chat_id
-		ORDER BY last_message_id DESC
+		FROM conversations c
+		JOIN conversation_members cm ON cm.conversation_id = c.id
+		LEFT JOIN messages m ON m.chat_id = c.id
+		WHERE cm.user_id = ?
+		GROUP BY c.id, title
+		ORDER BY last_message_id DESC, c.id DESC
 	`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("query ListUserConversations: %w", err)
+		return nil, fmt.Errorf("list user conversations: %w", err)
 	}
 	defer rows.Close()
 
-	var result []ConversationSummary
+	var convs []ConversationSummary
 
 	for rows.Next() {
-		var chatID, lastMsgID int64
-		if err := rows.Scan(&chatID, &lastMsgID); err != nil {
-			return nil, fmt.Errorf("scan ListUserConversations: %w", err)
+		var conv ConversationSummary
+		var lastMsgID sql.NullInt64
+
+		if err := rows.Scan(&conv.ID, &conv.Title, &lastMsgID); err != nil {
+			return nil, fmt.Errorf("scan user conversations: %w", err)
 		}
 
-		// Load the last message using the existing helper.
-		lastMsg, err := db.getMessageByID(ctx, lastMsgID)
-		if err != nil {
-			// If the message disappeared, skip this conversation.
-			if errors.Is(err, sql.ErrNoRows) {
-				continue
+		if lastMsgID.Valid {
+			lastMsg, err := db.getMessageByID(ctx, lastMsgID.Int64)
+			if err != nil {
+				// se il messaggio è sparito, lascio LastMessage vuoto ma non blocco tutto
+				if !errors.Is(err, sql.ErrNoRows) {
+					return nil, fmt.Errorf("load last message for conversation %d: %w", conv.ID, err)
+				}
+			} else {
+				conv.LastMessage = &lastMsg
 			}
-			return nil, fmt.Errorf("load last message for chat %d: %w", chatID, err)
 		}
 
-		// Simple title for now. You can improve it later (e.g. participants, group name, etc.).
-		title := fmt.Sprintf("Chat %d", chatID)
-
-		result = append(result, ConversationSummary{
-			ID:          chatID,
-			Title:       title,
-			LastMessage: &lastMsg,
-		})
+		convs = append(convs, conv)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows ListUserConversations: %w", err)
+		return nil, fmt.Errorf("rows user conversations: %w", err)
 	}
 
-	return result, nil
+	return convs, nil
 }
 
-// ListConversationMessages returns all messages for a given conversation.
-//
-// It currently assumes that the user is allowed to see the conversation.
-// You can later add an authorization check if you introduce a participants table.
+// ListConversationMessages restituisce tutti i messaggi di una conversazione,
+// se l’utente è membro di quella conversazione.
 func (db *appdbimpl) ListConversationMessages(
 	ctx context.Context,
 	userIdentifier string,
 	conversationID int64,
 ) ([]Message, error) {
-
-	// Optional: check that the user exists (and potentially that it belongs to the chat).
-	if _, err := db.getUserIDByIdentifier(ctx, userIdentifier); err != nil {
+	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
+	if err != nil {
 		return nil, err
+	}
+
+	// controllo che l’utente faccia parte della conversazione
+	var exists int
+	err = db.c.QueryRowContext(ctx, `
+		SELECT 1
+		FROM conversation_members
+		WHERE conversation_id = ? AND user_id = ?
+	`, conversationID, userID).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("check conversation membership: %w", err)
 	}
 
 	rows, err := db.c.QueryContext(ctx, `
@@ -100,13 +105,13 @@ func (db *appdbimpl) ListConversationMessages(
 			id, chat_id, sender_id, kind,
 			text, media_url,
 			reply_to_message_id, forwarded_from_message_id,
-			status, datetime(created_at) as created_at
+			status, datetime(created_at) AS created_at
 		FROM messages
 		WHERE chat_id = ?
 		ORDER BY created_at ASC, id ASC
 	`, conversationID)
 	if err != nil {
-		return nil, fmt.Errorf("query ListConversationMessages: %w", err)
+		return nil, fmt.Errorf("list conversation messages: %w", err)
 	}
 	defer rows.Close()
 
@@ -129,7 +134,7 @@ func (db *appdbimpl) ListConversationMessages(
 			&m.Status,
 			&m.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan ListConversationMessages: %w", err)
+			return nil, fmt.Errorf("scan conversation messages: %w", err)
 		}
 
 		if text.Valid {
@@ -153,7 +158,7 @@ func (db *appdbimpl) ListConversationMessages(
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows ListConversationMessages: %w", err)
+		return nil, fmt.Errorf("rows conversation messages: %w", err)
 	}
 
 	return messages, nil
