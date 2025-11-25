@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// Modelli di request per i messaggi (coerenti con lo YAML).
+// Request models for messages (aligned with the OpenAPI schema).
 
 type sendMessageRequest struct {
 	ChatID   int64   `json:"chatId"`
@@ -46,7 +47,7 @@ func (rt *_router) sendMessage(
 		return
 	}
 
-	// Validazione base
+	// Basic validation
 	req.Kind = strings.ToLower(strings.TrimSpace(req.Kind))
 	if req.ChatID <= 0 {
 		http.Error(w, `{"message":"chatId must be positive"}`, http.StatusBadRequest)
@@ -57,16 +58,16 @@ func (rt *_router) sendMessage(
 		return
 	}
 
-	// Regole su text / mediaUrl
+	// Rules on text / mediaUrl
 	if req.Kind == "text" {
 		if req.Text == nil || strings.TrimSpace(*req.Text) == "" {
 			http.Error(w, `{"message":"text is required for text messages"}`, http.StatusBadRequest)
 			return
 		}
-		// per sicurezza, mediaUrl deve essere vuoto
+		// For safety, mediaUrl must be empty
 		req.MediaURL = nil
 	} else {
-		// gif / image → serve mediaUrl
+		// gif / image → mediaUrl is required
 		if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
 			http.Error(w, `{"message":"mediaUrl is required for gif/image messages"}`, http.StatusBadRequest)
 			return
@@ -104,7 +105,7 @@ func (rt *_router) forwardMessage(
 		return
 	}
 
-	// messageId dalla path
+	// messageId from path
 	msgIDStr := ps.ByName("messageId")
 	messageID, err := strconv.ParseInt(msgIDStr, 10, 64)
 	if err != nil || messageID <= 0 {
@@ -124,7 +125,7 @@ func (rt *_router) forwardMessage(
 
 	msg, err := rt.db.ForwardMessage(r.Context(), ctx.UserIdentifier, messageID, req.ToChatID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, `{"message":"message not found"}`, http.StatusNotFound)
 			return
 		}
@@ -170,7 +171,7 @@ func (rt *_router) commentMessage(
 
 	reaction, err := rt.db.AddReaction(r.Context(), ctx.UserIdentifier, messageID, req.Emoji)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, `{"message":"message not found"}`, http.StatusNotFound)
 			return
 		}
@@ -212,7 +213,7 @@ func (rt *_router) uncommentMessage(
 
 	err = rt.db.RemoveReaction(r.Context(), ctx.UserIdentifier, messageID, emoji)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, `{"message":"reaction not found"}`, http.StatusNotFound)
 			return
 		}
@@ -245,7 +246,7 @@ func (rt *_router) deleteMessage(
 
 	err = rt.db.DeleteMessage(r.Context(), ctx.UserIdentifier, messageID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, `{"message":"message not found or not owned by user"}`, http.StatusNotFound)
 			return
 		}
