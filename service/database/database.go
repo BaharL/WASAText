@@ -134,18 +134,6 @@ func New(db *sql.DB) (AppDatabase, error) {
 	}, nil
 }
 
-func (db *appdbimpl) GetUserConversations(ctx context.Context, userID int64) ([]Conversation, error) {
-    rows, err := db.c.QueryContext(ctx, `
-        SELECT c.id, c.type, c.name, datetime(c.created_at)
-        FROM conversations c
-        JOIN conversation_members m ON c.id = m.conversation_id
-        WHERE m.user_id = ?
-        ORDER BY c.created_at DESC
-    `, userID)
-    ...
-}
-
-
 func (db *appdbimpl) Ping() error {
 	return db.c.Ping()
 }
