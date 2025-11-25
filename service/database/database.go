@@ -22,6 +22,43 @@ type AppDatabase interface {
 	// Search users by name (prefix / like)
 	SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
 
+	// Message operations
+	SendMessage(
+		ctx context.Context,
+		senderIdentifier string,
+		chatID int64,
+		kind string,
+		text *string,
+		mediaURL *string,
+	) (Message, error)
+
+	ForwardMessage(
+		ctx context.Context,
+		senderIdentifier string,
+		messageID int64,
+		toChatID int64,
+	) (Message, error)
+
+	AddReaction(
+		ctx context.Context,
+		senderIdentifier string,
+		messageID int64,
+		emoji string,
+	) (Reaction, error)
+
+	RemoveReaction(
+		ctx context.Context,
+		senderIdentifier string,
+		messageID int64,
+		emoji string,
+	) error
+
+	DeleteMessage(
+		ctx context.Context,
+		senderIdentifier string,
+		messageID int64,
+	) error
+
 	// Ping checks that the DB connection is still alive.
 	Ping() error
 }
@@ -57,6 +94,11 @@ func New(db *sql.DB) (AppDatabase, error) {
 	);`
 	if _, err := db.Exec(usersStmt); err != nil {
 		return nil, fmt.Errorf("error creating users table: %w", err)
+	}
+	
+	// Create tables for messages and reactions.
+	if err := initMessageTables(db); err != nil {
+		return nil, fmt.Errorf("error creating message tables: %w", err)
 	}
 
 	return &appdbimpl{
