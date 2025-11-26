@@ -188,7 +188,10 @@ func (rt *_router) setGroupName(
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]string{
+    "message": "Group name updated", // o "Group photo updated"
+	})
+
 }
 
 // setGroupPhoto handles PUT /groups/:chatId/photo.
