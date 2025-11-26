@@ -552,8 +552,16 @@ paths:
                   pattern: "^[A-Za-z0-9 _'-]+$"
                   example: "Amiche di Roma"
       responses:
-        "204":
+        "200":
           description: Group name updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Group name updated"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -585,8 +593,17 @@ paths:
                   example: "https://example.com/group-photo.png"
 
       responses:
-        "204":
+        "200":
           description: Group photo updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Group photo updated"
+
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
