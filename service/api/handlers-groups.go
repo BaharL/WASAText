@@ -189,7 +189,7 @@ func (rt *_router) setGroupName(
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
-    "message": "Group name updated", // o "Group photo updated"
+		"message": "Group name updated", // o "Group photo updated"
 	})
 
 }

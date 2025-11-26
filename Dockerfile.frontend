@@ -1,0 +1,25 @@
+# Stage 1: build frontend (Vue/Vite)
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+# Copio solo i file necessari per installare le dipendenze
+COPY webui/package.json webui/yarn.lock ./
+RUN yarn install
+
+# Copio il resto del frontend
+COPY webui .
+
+# Build produzione
+RUN yarn build
+
+# Stage 2: Nginx per servire i file statici
+FROM nginx:alpine
+
+# Copio la build Vite nella cartella pubblica di Nginx
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# La view viene servita su 3000 (come da specifiche HW)
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]
