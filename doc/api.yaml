@@ -176,7 +176,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
-
+ 
   /conversations:
     get:
       tags: [conversations]
@@ -190,10 +190,31 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                description: List of conversation summaries.
-                items:
-                  $ref: "#/components/schemas/Conversation"
+                type: object
+                description: List of conversations belonging to the user.
+                properties:
+                  conversations:
+                    type: array
+                    description: List of conversation summaries.
+                    minItems: 0
+                    maxItems: 1000
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+              examples:
+                ok:
+                  summary: Example conversations list
+                  value:
+                    conversations:
+                      - id: 134
+                        title: "Chat 134"
+                        lastMessage:
+                          id: 501
+                          chatId: 134
+                          senderId: 223
+                          kind: "text"
+                          text: "Ciao!"
+                          status: "read"
+                          createdAt: "2025-11-18T18:00:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
   /conversations/{chatId}:
@@ -211,10 +232,28 @@ paths:
           content:
             application/json:
               schema:
-                type: array
+                type: object
                 description: List of messages in the conversation.
-                items:
-                  $ref: "#/components/schemas/Message"
+                properties:
+                  messages:
+                    type: array
+                    description: Messages of the conversation.
+                    minItems: 0
+                    maxItems: 500
+                    items:
+                      $ref: "#/components/schemas/Message"
+              examples:
+                ok:
+                  summary: Example conversation messages
+                  value:
+                    messages:
+                      - id: 501
+                        chatId: 134
+                        senderId: 223
+                        kind: "text"
+                        text: "Ciao!"
+                        status: "read"
+                        createdAt: "2025-11-18T18:00:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -406,6 +445,10 @@ paths:
                   items:
                     type: string
                     format: uuid
+                    description: User identifier
+                    pattern: "^[0-9a-fA-F-]{36}$"
+                    minLength: 36
+                    maxLength: 36
                     example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "201":
@@ -414,11 +457,17 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Identifier of the created group.
                 properties:
                   chatId:
                     type: integer
                     description: Identifier of the created group conversation.
                     example: 200
+              examples:
+                ok:
+                  summary: Example created group
+                  value:
+                    chatId: 200
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
@@ -449,6 +498,10 @@ paths:
                   items:
                     type: string
                     format: uuid
+                    description: User identifier
+                    pattern: "^[0-9a-fA-F-]{36}$"
+                    minLength: 36
+                    maxLength: 36
                     example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "204":
@@ -528,7 +581,9 @@ paths:
                   type: string
                   format: url
                   description: Public URL of the group photo.
+                  maxLength: 2048
                   example: "https://example.com/group-photo.png"
+
       responses:
         "204":
           description: Group photo updated
