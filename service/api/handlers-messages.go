@@ -12,7 +12,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// Request models for messages (aligned with the OpenAPI schema).
+// Request models aligned with OpenAPI
 
 type sendMessageRequest struct {
 	ChatID   int64   `json:"chatId"`
@@ -29,7 +29,10 @@ type addReactionRequest struct {
 	Emoji string `json:"emoji"`
 }
 
-// sendMessage handles POST /messages.
+// -----------------------------------------------------------------------------
+// POST /messages — Send a new message
+// -----------------------------------------------------------------------------
+
 func (rt *_router) sendMessage(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -37,39 +40,39 @@ func (rt *_router) sendMessage(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
 	var req sendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid JSON body"))
 		return
 	}
 
-	// Basic validation
 	req.Kind = strings.ToLower(strings.TrimSpace(req.Kind))
+
 	if req.ChatID <= 0 {
-		http.Error(w, `{"message":"chatId must be positive"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("chatId must be positive"))
 		return
 	}
 	if req.Kind != "text" && req.Kind != "gif" && req.Kind != "image" {
-		http.Error(w, `{"message":"invalid kind"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid kind"))
 		return
 	}
 
-	// Rules on text / mediaUrl
+	// Validation according to kind
 	if req.Kind == "text" {
 		if req.Text == nil || strings.TrimSpace(*req.Text) == "" {
-			http.Error(w, `{"message":"text is required for text messages"}`, http.StatusBadRequest)
+			writeJSON(w, http.StatusBadRequest, errorMsg("text is required for text messages"))
 			return
 		}
-		// For safety, mediaUrl must be empty
 		req.MediaURL = nil
-	} else if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
-		// gif / image → mediaUrl is required
-		http.Error(w, `{"message":"mediaUrl is required for gif/image messages"}`, http.StatusBadRequest)
-		return
+	} else {
+		if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
+			writeJSON(w, http.StatusBadRequest, errorMsg("mediaUrl is required for gif/image messages"))
+			return
+		}
 	}
 
 	msg, err := rt.db.SendMessage(
@@ -82,16 +85,17 @@ func (rt *_router) sendMessage(
 	)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("cannot send message")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(msg)
+	writeJSON(w, http.StatusCreated, msg)
 }
 
-// forwardMessage handles POST /messages/:messageId/forward.
+// -----------------------------------------------------------------------------
+// POST /messages/:messageId/forward — Forward message
+// -----------------------------------------------------------------------------
+
 func (rt *_router) forwardMessage(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -99,45 +103,44 @@ func (rt *_router) forwardMessage(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	// messageId from path
-	msgIDStr := ps.ByName("messageId")
-	messageID, err := strconv.ParseInt(msgIDStr, 10, 64)
-	if err != nil || messageID <= 0 {
-		http.Error(w, `{"message":"invalid messageId"}`, http.StatusBadRequest)
+	messageID, err := parseID(ps.ByName("messageId"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid messageId"))
 		return
 	}
 
 	var req forwardMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid JSON body"))
 		return
 	}
 	if req.ToChatID <= 0 {
-		http.Error(w, `{"message":"toChatId must be positive"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("toChatId must be positive"))
 		return
 	}
 
 	msg, err := rt.db.ForwardMessage(r.Context(), ctx.UserIdentifier, messageID, req.ToChatID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, `{"message":"message not found"}`, http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, errorMsg("message not found"))
 			return
 		}
 		ctx.Logger.WithError(err).Error("cannot forward message")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(msg)
+	writeJSON(w, http.StatusCreated, msg)
 }
 
-// commentMessage handles POST /messages/:messageId/reactions.
+// -----------------------------------------------------------------------------
+// POST /messages/:messageId/reactions — Add reaction
+// -----------------------------------------------------------------------------
+
 func (rt *_router) commentMessage(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -145,45 +148,46 @@ func (rt *_router) commentMessage(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	msgIDStr := ps.ByName("messageId")
-	messageID, err := strconv.ParseInt(msgIDStr, 10, 64)
-	if err != nil || messageID <= 0 {
-		http.Error(w, `{"message":"invalid messageId"}`, http.StatusBadRequest)
+	messageID, err := parseID(ps.ByName("messageId"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid messageId"))
 		return
 	}
 
 	var req addReactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid JSON body"))
 		return
 	}
+
 	req.Emoji = strings.TrimSpace(req.Emoji)
 	if req.Emoji == "" {
-		http.Error(w, `{"message":"emoji is required"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("emoji is required"))
 		return
 	}
 
 	reaction, err := rt.db.AddReaction(r.Context(), ctx.UserIdentifier, messageID, req.Emoji)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, `{"message":"message not found"}`, http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, errorMsg("message not found"))
 			return
 		}
 		ctx.Logger.WithError(err).Error("cannot add reaction")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(reaction)
+	writeJSON(w, http.StatusCreated, reaction)
 }
 
-// uncommentMessage handles DELETE /messages/:messageId/reactions/:emoji.
+// -----------------------------------------------------------------------------
+// DELETE /messages/:messageId/reactions/:emoji — Remove reaction
+// -----------------------------------------------------------------------------
+
 func (rt *_router) uncommentMessage(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -191,39 +195,40 @@ func (rt *_router) uncommentMessage(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	msgIDStr := ps.ByName("messageId")
-	messageID, err := strconv.ParseInt(msgIDStr, 10, 64)
-	if err != nil || messageID <= 0 {
-		http.Error(w, `{"message":"invalid messageId"}`, http.StatusBadRequest)
+	messageID, err := parseID(ps.ByName("messageId"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid messageId"))
 		return
 	}
 
-	emoji := ps.ByName("emoji")
-	emoji = strings.TrimSpace(emoji)
+	emoji := strings.TrimSpace(ps.ByName("emoji"))
 	if emoji == "" {
-		http.Error(w, `{"message":"emoji is required"}`, http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, errorMsg("emoji is required"))
 		return
 	}
 
 	err = rt.db.RemoveReaction(r.Context(), ctx.UserIdentifier, messageID, emoji)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, `{"message":"reaction not found"}`, http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, errorMsg("reaction not found"))
 			return
 		}
 		ctx.Logger.WithError(err).Error("cannot remove reaction")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// deleteMessage handles DELETE /messages/:messageId.
+// -----------------------------------------------------------------------------
+// DELETE /messages/:messageId — Delete message
+// -----------------------------------------------------------------------------
+
 func (rt *_router) deleteMessage(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -231,27 +236,42 @@ func (rt *_router) deleteMessage(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	msgIDStr := ps.ByName("messageId")
-	messageID, err := strconv.ParseInt(msgIDStr, 10, 64)
-	if err != nil || messageID <= 0 {
-		http.Error(w, `{"message":"invalid messageId"}`, http.StatusBadRequest)
+	messageID, err := parseID(ps.ByName("messageId"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid messageId"))
 		return
 	}
 
 	err = rt.db.DeleteMessage(r.Context(), ctx.UserIdentifier, messageID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, `{"message":"message not found or not owned by user"}`, http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, errorMsg("message not found or not owned by user"))
 			return
 		}
 		ctx.Logger.WithError(err).Error("cannot delete message")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+func parseID(s string) (int64, error) {
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.New("invalid id")
+	}
+	return id, nil
+}
+
+func errorMsg(msg string) map[string]string {
+	return map[string]string{"message": msg}
 }
