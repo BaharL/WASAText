@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,11 +9,11 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// Request models for group operations.
+// --- Request Models ---------------------------------------------------------
 
 type createGroupRequest struct {
 	Name    string   `json:"name"`
-	Members []string `json:"members"` // user identifiers (same as in /session response)
+	Members []string `json:"members"`
 }
 
 type addMembersRequest struct {
@@ -33,56 +32,51 @@ type createGroupResponse struct {
 	ChatID int64 `json:"chatId"`
 }
 
-// createGroup handles POST /groups.
-// It creates a new group conversation with the specified name and members.
+// ---------------------------------------------------------------------------
+// createGroup  → POST /groups
+// ---------------------------------------------------------------------------
+
 func (rt *_router) createGroup(
 	w http.ResponseWriter,
 	r *http.Request,
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// 1) User must be authenticated.
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
-	// 2) Parse JSON body.
 	var req createGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+	if err := readJSON(r, &req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		http.Error(w, `{"message":"group name is required"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Group name is required")
 		return
 	}
 
-	// If members is nil, use empty slice to avoid nil handling in DB.
 	if req.Members == nil {
 		req.Members = []string{}
 	}
 
-	// 3) Call database to create the group.
 	chatID, err := rt.db.CreateGroup(r.Context(), ctx.UserIdentifier, req.Name, req.Members)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("cannot create group")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	// 4) Respond with created group id.
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(createGroupResponse{
-		ChatID: chatID,
-	})
+	writeJSON(w, http.StatusCreated, createGroupResponse{ChatID: chatID})
 }
 
-// addToGroup handles POST /groups/:chatId/members.
-// It adds one or more members to the target group conversation.
+// ---------------------------------------------------------------------------
+// addToGroup  → POST /groups/:chatId/members
+// ---------------------------------------------------------------------------
+
 func (rt *_router) addToGroup(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -90,39 +84,40 @@ func (rt *_router) addToGroup(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
-	chatIDStr := ps.ByName("chatId")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
 	if err != nil || chatID <= 0 {
-		http.Error(w, `{"message":"invalid chatId"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
 		return
 	}
 
 	var req addMembersRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+	if err := readJSON(r, &req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
 	if len(req.Members) == 0 {
-		http.Error(w, `{"message":"members list cannot be empty"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Members list cannot be empty")
 		return
 	}
 
 	if err := rt.db.AddMembersToGroup(r.Context(), ctx.UserIdentifier, chatID, req.Members); err != nil {
 		ctx.Logger.WithError(err).Error("cannot add members to group")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// leaveGroup handles DELETE /groups/:chatId/members/me.
-// It removes the authenticated user from the specified group.
+// ---------------------------------------------------------------------------
+// leaveGroup  → DELETE /groups/:chatId/members/me
+// ---------------------------------------------------------------------------
+
 func (rt *_router) leaveGroup(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -130,29 +125,29 @@ func (rt *_router) leaveGroup(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
-	chatIDStr := ps.ByName("chatId")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
 	if err != nil || chatID <= 0 {
-		http.Error(w, `{"message":"invalid chatId"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
 		return
 	}
 
 	if err := rt.db.LeaveGroup(r.Context(), ctx.UserIdentifier, chatID); err != nil {
-		// Per semplicità, non distinguiamo 404/403, ma puoi farlo in seguito.
 		ctx.Logger.WithError(err).Error("cannot leave group")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// setGroupName handles PUT /groups/:chatId/name.
-// It updates the name of an existing group conversation.
+// ---------------------------------------------------------------------------
+// setGroupName  → PUT /groups/:chatId/name
+// ---------------------------------------------------------------------------
+
 func (rt *_router) setGroupName(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -160,42 +155,43 @@ func (rt *_router) setGroupName(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
-	chatIDStr := ps.ByName("chatId")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
 	if err != nil || chatID <= 0 {
-		http.Error(w, `{"message":"invalid chatId"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
 		return
 	}
 
 	var req setGroupNameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+	if err := readJSON(r, &req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
+
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		http.Error(w, `{"message":"group name is required"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Group name is required")
 		return
 	}
 
 	if err := rt.db.SetGroupName(r.Context(), ctx.UserIdentifier, chatID, req.Name); err != nil {
 		ctx.Logger.WithError(err).Error("cannot set group name")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"message": "Group name updated", // o "Group photo updated"
+		"message": "Group name updated",
 	})
-
 }
 
-// setGroupPhoto handles PUT /groups/:chatId/photo.
-// It uploads or changes the photo associated with a group conversation.
+// ---------------------------------------------------------------------------
+// setGroupPhoto  → PUT /groups/:chatId/photo
+// ---------------------------------------------------------------------------
+
 func (rt *_router) setGroupPhoto(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -203,33 +199,35 @@ func (rt *_router) setGroupPhoto(
 	ctx reqcontext.RequestContext,
 ) {
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
 		return
 	}
 
-	chatIDStr := ps.ByName("chatId")
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
 	if err != nil || chatID <= 0 {
-		http.Error(w, `{"message":"invalid chatId"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
 		return
 	}
 
 	var req setGroupPhotoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"message":"invalid JSON body"}`, http.StatusBadRequest)
+	if err := readJSON(r, &req); err != nil {
+		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
+
 	req.PhotoURL = strings.TrimSpace(req.PhotoURL)
 	if req.PhotoURL == "" {
-		http.Error(w, `{"message":"photoUrl is required"}`, http.StatusBadRequest)
+		writeErrorJSON(w, http.StatusBadRequest, "photoUrl is required")
 		return
 	}
 
 	if err := rt.db.SetGroupPhoto(r.Context(), ctx.UserIdentifier, chatID, req.PhotoURL); err != nil {
 		ctx.Logger.WithError(err).Error("cannot set group photo")
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Group photo updated",
+	})
 }
