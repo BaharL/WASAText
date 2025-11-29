@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"scripts": {
 		"dev": "yarn install --immutable --immutable-cache && vite",
-		"lint" : "nodo node_modules/eslint/bin/eslint.js.",
+		"lint": "yarn eslint .",
 		"build-dev": "yarn install --immutable --immutable-cache && vite build --mode development",
 		"build-prod": "yarn install --immutable --immutable-cache && vite build --mode production",
 		"build-embed": "yarn install --immutable --immutable-cache && vite build --mode production --base=/dashboard/",
@@ -16,9 +16,8 @@
 	},
 	"devDependencies": {
 		"@vitejs/plugin-vue": "^3.0.1",
-		"eslint": "9.2.0",
-		"eslint-plugin-import": "2.29.1",
-		"eslint-plugin-vue": "9.25.0",
+		"eslint": "^9.2.0",
+		"eslint-plugin-vue": "^9.25.0",
 		"vite": "^3.0.4"
 	},
 	"packageManager": "yarn@4.5.0"
