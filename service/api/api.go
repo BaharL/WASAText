@@ -2,9 +2,9 @@
 Package api contains all HTTP handlers used by the WASAText backend.
 
 This package is responsible for:
-  • defining the HTTP router and registering all API endpoints
-  • wiring requests to the database layer
-  • providing the main entry point for the web API
+  - defining the HTTP router and registering all API endpoints
+  - wiring requests to the database layer
+  - providing the main entry point for the web API
 
 To use this package, create a new Router with New() passing a valid Config.
 The returned Router exposes a Handler() method that can be used as the
