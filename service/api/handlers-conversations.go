@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -10,68 +9,56 @@ import (
 )
 
 // listMyConversations handles GET /conversations.
-// It returns the list of conversations for the authenticated user.
 func (rt *_router) listMyConversations(
 	w http.ResponseWriter,
 	r *http.Request,
-	ps httprouter.Params,
+	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// 1) User must be authenticated.
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	// 2) Ask the database for the conversations.
 	convs, err := rt.db.ListUserConversations(r.Context(), ctx.UserIdentifier)
 	if err != nil {
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		ctx.Logger.WithError(err).Error("cannot list conversations")
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	// 3) Return JSON response.
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(convs); err != nil {
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"conversations": convs,
+	})
 }
 
-// listConversationMessages handles GET /conversations/{id}/messages.
-// It returns all messages of a specific conversation.
+// listConversationMessages handles GET /conversations/{chatId}.
 func (rt *_router) listConversationMessages(
 	w http.ResponseWriter,
 	r *http.Request,
 	ps httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// 1) User must be authenticated.
 	if ctx.UserIdentifier == "" {
-		http.Error(w, `{"message":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	// 2) Read conversation id from URL path.
-	//    IMPORTANT: adjust "conversationId" to match your router/YAML parameter name (e.g. "chatId").
-	chatIDStr := ps.ByName("conversationId")
+	chatIDStr := ps.ByName("chatId")
 	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, `{"message":"invalid conversation id"}`, http.StatusBadRequest)
+	if err != nil || chatID <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid chatId"))
 		return
 	}
 
-	// 3) Ask the database for the messages of this conversation.
 	msgs, err := rt.db.ListConversationMessages(r.Context(), ctx.UserIdentifier, chatID)
 	if err != nil {
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
+		ctx.Logger.WithError(err).Error("cannot list conversation messages")
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	// 4) Return JSON response.
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(msgs); err != nil {
-		http.Error(w, `{"message":"internal server error"}`, http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"messages": msgs,
+	})
 }
