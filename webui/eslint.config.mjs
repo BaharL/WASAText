@@ -1,22 +1,25 @@
-/*
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- *
- * @author ENDERZOMBI102 <enderzombi102.end@gmail.com> 2024
- * @description Quick and dirty `eslint` config to better conform to the Prof's requests and style.
- */
-import vue from 'eslint-plugin-vue';
-
-// noinspection JSUnusedGlobalSymbols
-export default [
-	... vue.configs[ "flat/recommended" ],
-	{
-		rules: {
-			'vue/multi-word-component-names': 'off',
-			'vue/max-attributes-per-line': 'off',
-			'vue/require-default-prop': 'off',
-			'vue/singleline-html-element-content-newline': 'off'
-		}
-	},
-];
+{
+  "name": "teapot",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "yarn install --immutable --immutable-cache && vite",
+    "lint": "node node_modules/eslint/bin/eslint.js .",
+    "build-dev": "yarn install --immutable --immutable-cache && vite build --mode development",
+    "build-prod": "yarn install --immutable --immutable-cache && vite build --mode production",
+    "build-embed": "yarn install --immutable --immutable-cache && vite build --mode production --base=/dashboard/",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "axios": "^0.28.0",
+    "vue": "^3.2.37",
+    "vue-router": "^4.1.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^3.0.1",
+    "eslint": "^9.2.0",
+    "eslint-plugin-vue": "^9.25.0",
+    "eslint-plugin-import": "^2.29.1",
+    "vite": "^3.0.4"
+  },
+  "packageManager": "yarn@4.5.0"
+}
