@@ -34,7 +34,7 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			"remote-ip": r.RemoteAddr,
 		})
 
-		// Extract authenticated user identifier from Authorization: Bearer <token>
+		// Extract authenticated user identifier (Bearer token) from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			ctx.UserIdentifier = strings.TrimSpace(authHeader[len("Bearer "):])
