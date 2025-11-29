@@ -1,9 +1,14 @@
 /*
-Package api exposes the main API engine. All HTTP APIs are handled here - so-called "business logic" should be here, or
-in a dedicated package (if that logic is complex enough).
+Package api contains all HTTP handlers used by the WASAText backend.
 
-To use this package, you should create a new instance with New() passing a valid Config. The resulting Router will have
-the Router.Handler() function that returns a handler that can be used in a http.Server (or in other middlewares).
+This package is responsible for:
+  • defining the HTTP router and registering all API endpoints
+  • wiring requests to the database layer
+  • providing the main entry point for the web API
+
+To use this package, create a new Router with New() passing a valid Config.
+The returned Router exposes a Handler() method that can be used as the
+http.Server handler.
 
 Example:
 
@@ -13,14 +18,12 @@ Example:
 		Database: appdb,
 	})
 	if err != nil {
-		logger.WithError(err).Error("error creating the API server instance")
-		return fmt.Errorf("error creating the API server instance: %w", err)
+		logger.WithError(err).Error("cannot create API server instance")
+		return err
 	}
 	router := apirouter.Handler()
 
-	// ... other stuff here, like middleware chaining, etc.
-
-	// Create the API server
+	// Create the HTTP server
 	apiserver := http.Server{
 		Addr:              cfg.Web.APIHost,
 		Handler:           router,
@@ -29,42 +32,43 @@ Example:
 		WriteTimeout:      cfg.Web.WriteTimeout,
 	}
 
-	// Start the service listening for requests in a separate goroutine
+	// Start listening for requests
 	apiserver.ListenAndServe()
 
-See the `main.go` file inside the `cmd/webapi` for a full usage example.
+See cmd/webapi/main.go for the complete startup sequence.
 */
 package api
 
 import (
 	"errors"
+	"net/http"
+
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
-// Config is used to provide dependencies and configuration to the New function.
+// Config provides dependencies and configuration to New.
 type Config struct {
-	// Logger where log entries are sent
+	// Logger is the logger used by the API layer.
 	Logger logrus.FieldLogger
 
-	// Database is the instance of database.AppDatabase where data are saved
+	// Database is the application database implementation.
 	Database database.AppDatabase
 }
 
-// Router is the package API interface representing an API handler builder
+// Router is the public interface exposed by this package.
 type Router interface {
-	// Handler returns an HTTP handler for APIs provided in this package
+	// Handler returns an HTTP handler that serves all WASAText APIs.
 	Handler() http.Handler
 
-	// Close terminates any resource used in the package
+	// Close releases any resource held by the router (if any).
 	Close() error
 }
 
-// New returns a new Router instance
+// New creates and returns a new Router instance.
 func New(cfg Config) (Router, error) {
-	// Check if the configuration is correct
+	// Validate configuration.
 	if cfg.Logger == nil {
 		return nil, errors.New("logger is required")
 	}
@@ -72,8 +76,7 @@ func New(cfg Config) (Router, error) {
 		return nil, errors.New("database is required")
 	}
 
-	// Create a new router where we will register HTTP endpoints. The server will pass requests to this router to be
-	// handled.
+	// Create the underlying HTTP router where all endpoints are registered.
 	router := httprouter.New()
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
@@ -88,8 +91,8 @@ func New(cfg Config) (Router, error) {
 type _router struct {
 	router *httprouter.Router
 
-	// baseLogger is a logger for non-requests contexts, like goroutines or background tasks not started by a request.
-	// Use context logger if available (e.g., in requests) instead of this logger.
+	// baseLogger is used outside of request contexts (e.g. background tasks).
+	// For request-scoped logs, prefer the logger in the request context.
 	baseLogger logrus.FieldLogger
 
 	db database.AppDatabase
