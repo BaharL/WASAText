@@ -1,6 +1,12 @@
 <script>
 export default {
-	props: ['msg']
+  name: 'ErrorMsg',
+  props: {
+    msg: {
+      type: String,
+      required: true
+    }
+  }
 }
 </script>
 
