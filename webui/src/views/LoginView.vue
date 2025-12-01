@@ -20,7 +20,7 @@
           type="text"
           placeholder="es. bahar"
           :disabled="loading"
-        />
+        >
 
         <button type="submit" :disabled="loading || !name">
           <span v-if="loading">Connessione…</span>

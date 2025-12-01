@@ -8,16 +8,26 @@
  */
 import vue from 'eslint-plugin-vue';
 
-// noinspection JSUnusedGlobalSymbols
 export default [
-	... vue.configs[ "flat/recommended" ],
-	{
-		rules: {
-			'vue/multi-word-component-names': 'off',
-			'vue/max-attributes-per-line': 'off',
-			'impor/no-unused-modules': 'off',
-			'vue/require-default-prop': 'off',
-			'vue/singleline-html-element-content-newline': 'off'
-		}
-	},
+  {
+    ignores: [
+      "node_modules/",
+      ".yarn/",
+      "public/bootstrap/",
+      "public/bootstrap/**",
+      "public/**"
+    ]
+  },
+
+  // Config del prof
+  ...vue.configs["flat/recommended"],
+
+  {
+    rules: {
+      "vue/multi-word-component-names": "off",
+      "vue/max-attributes-per-line": "off",
+      "vue/require-default-prop": "off",
+      "vue/singleline-html-element-content-newline": "off"
+    }
+  }
 ];
