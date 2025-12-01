@@ -1,6 +1,12 @@
 <script>
 export default {
-	props: ["loading"]
+  name: 'LoadingSpinner',
+  props: {
+    loading: {
+      type: Boolean,
+      required: true
+    }
+  }
 }
 </script>
 
@@ -12,7 +18,10 @@ export default {
       </div>
     </div>
   </div>
-  <div v-if="!loading"><slot /></div>
+  <div v-else>
+    <slot />
+  </div>
 </template>
 
-<style></style>
+<style>
+</style>
