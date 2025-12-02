@@ -60,7 +60,6 @@ async function onSubmit() {
   }
 }
 </script>
-
 <style scoped>
 .login-page {
   min-height: calc(100vh - 80px);
