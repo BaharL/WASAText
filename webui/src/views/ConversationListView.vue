@@ -17,10 +17,10 @@
     <!-- Error -->
     <ErrorMsg v-if="error" :msg="error" />
 
-    <!-- Loading -->
+    <!-- Loading / content -->
     <LoadingSpinner :loading="loading">
-      <!-- Empty -->
-      <div 
+      <!-- Empty state -->
+      <div
         v-if="!loading && !error && conversations.length === 0"
         class="text-muted"
       >
@@ -58,14 +58,18 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMyConversations } from '../services/api.js'
+
+// axios instance (kept inside the component as you asked)
+import axios from '../services/axios.js'
+// we reuse getToken so the Authorization header is consistent
+import { getToken } from '../services/api.js'
 
 const router = useRouter()
 const conversations = ref([])
 const loading = ref(false)
 const error = ref('')
 
-// Titolo robusto (alcune API hanno name, altre title, altre chatName…)
+// Build a readable title from different possible fields
 function getTitle(c) {
   return (
     c.title ||
@@ -75,15 +79,22 @@ function getTitle(c) {
   )
 }
 
-// Carica conversazioni
 async function loadConversations() {
   loading.value = true
   error.value = ''
 
   try {
-    const data = await getMyConversations()
+    const token = getToken()
+    const headers = {}
 
-    // Le API del prof cambiano forma -> questa riga gestisce tutto
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    const response = await axios.get('/conversations', { headers })
+    const data = response.data
+
+    // Handle both { conversations: [...] } and plain array
     conversations.value = Array.isArray(data)
       ? data
       : (data.conversations || [])
@@ -95,7 +106,7 @@ async function loadConversations() {
   }
 }
 
-// Apri conversazione → la pagina la creiamo step 3
+// For now this only navigates; we will create Conversation view later
 function openConversation(c) {
   const chatId = c.chatId ?? c.id
   if (!chatId) return
