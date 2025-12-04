@@ -15,7 +15,7 @@
         type="button"
         class="btn btn-sm btn-outline-secondary"
         :disabled="loading"
-        @click="loadMessages"
+        @click="loadConversation"
       >
         <span v-if="loading">Reloading…</span>
         <span v-else>Reload</span>
@@ -46,7 +46,7 @@
             v-for="m in messages"
             :key="m.id"
             class="message-row"
-            :class="{ 'mine': isMine(m) }"
+            :class="{ mine: isMine(m) }"
           >
             <div class="bubble">
               <div class="bubble-meta">
@@ -106,12 +106,13 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import ErrorMsg from '../components/ErrorMsg.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
-import { getConversationMessages, sendMessage } from '../services/api.js'
+import { getConversation, sendMessage } from '../services/api.js'
 
 const route = useRoute()
+// lascio stringa: l’API accetta anche "123" e la converte in numero
 const chatId = route.params.chatId
 
-const title = ref(`Conversation`)
+const title = ref('Conversation')
 const messages = ref([])
 const loading = ref(false)
 const sending = ref(false)
@@ -119,12 +120,12 @@ const error = ref('')
 const draft = ref('')
 const messageListEl = ref(null)
 
-// Heuristica: se l’API indica che il messaggio è “mio”
+// Heuristica: se il messaggio è mio
 function isMine(m) {
   return m.mine === true || m.direction === 'outgoing'
 }
 
-// Formatta l’orario in HH:MM
+// Formatta orario in HH:MM
 function formatTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -134,7 +135,7 @@ function formatTime(iso) {
   })
 }
 
-// Scrolla sempre in fondo dopo aver caricato/mandato messaggi
+// Scroll in fondo dopo aggiornamento
 function scrollToBottom() {
   const el = messageListEl.value
   if (el) {
@@ -142,8 +143,8 @@ function scrollToBottom() {
   }
 }
 
-// Carica i messaggi della conversazione
-async function loadMessages() {
+// Carica dettagli + messaggi conversazione
+async function loadConversation() {
   if (!chatId) {
     error.value = 'Chat non valida.'
     return
@@ -153,14 +154,18 @@ async function loadMessages() {
   error.value = ''
 
   try {
-    const data = await getConversationMessages(chatId)
+    const data = await getConversation(chatId)
 
-    // Gestiamo sia { messages: [...] } che direttamente [...]
-    messages.value = Array.isArray(data) ? data : (data.messages || [])
+    // data.messages (schema del prof) oppure direttamente array
+    messages.value = Array.isArray(data)
+      ? data
+      : (data.messages || [])
 
-    // Se l’API ti manda il titolo, usalo
+    // Se il backend manda un titolo, usiamolo
     if (data.title || data.name || data.chatName) {
       title.value = data.title || data.name || data.chatName
+    } else {
+      title.value = `Conversation`
     }
 
     await nextTick()
@@ -173,7 +178,7 @@ async function loadMessages() {
   }
 }
 
-// Invia un nuovo messaggio
+// Invia messaggio testuale usando la tua API: POST /messages
 async function handleSend() {
   const text = draft.value.trim()
   if (!text || !chatId) return
@@ -182,14 +187,20 @@ async function handleSend() {
   error.value = ''
 
   try {
-    const msg = await sendMessage(chatId, text)
+    const payload = {
+      chatId: Number(chatId), // il prof l’ha definito number
+      kind: 'text',
+      text
+    }
 
-    if (msg) {
-      // Alcune API restituiscono il messaggio appena creato
-      messages.value.push(msg)
+    const created = await sendMessage(payload)
+
+    if (created && created.id) {
+      // API ritorna il messaggio creato → push
+      messages.value.push(created)
     } else {
-      // Altre no → ricarichiamo la lista
-      await loadMessages()
+      // se non torna nulla, ricarichiamo
+      await loadConversation()
     }
 
     draft.value = ''
@@ -204,7 +215,7 @@ async function handleSend() {
 }
 
 onMounted(() => {
-  loadMessages()
+  loadConversation()
 })
 </script>
 
@@ -212,7 +223,7 @@ onMounted(() => {
 .conversation-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px); /* sottrae navbar top del template */
+  height: calc(100vh - 56px); /* sottrae la navbar top del template */
 }
 
 .conv-header {
