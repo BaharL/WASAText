@@ -6,8 +6,8 @@
       <button
         type="button"
         class="btn btn-sm btn-outline-secondary"
-        @click="loadConversations"
         :disabled="loading"
+        @click="loadConversations"
       >
         <span v-if="loading">Reloading…</span>
         <span v-else>Reload</span>
@@ -59,9 +59,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
-// axios instance (kept inside the component as you asked)
+// axios instance (dentro al componente come volevi tu)
 import axios from '../services/axios.js'
-// we reuse getToken so the Authorization header is consistent
+// riutilizziamo getToken così l'header Authorization è consistente
 import { getToken } from '../services/api.js'
 
 const router = useRouter()
@@ -69,7 +69,7 @@ const conversations = ref([])
 const loading = ref(false)
 const error = ref('')
 
-// Build a readable title from different possible fields
+// Titolo robusto (diversi back-end usano field diversi)
 function getTitle(c) {
   return (
     c.title ||
@@ -94,7 +94,7 @@ async function loadConversations() {
     const response = await axios.get('/conversations', { headers })
     const data = response.data
 
-    // Handle both { conversations: [...] } and plain array
+    // Gestisce sia { conversations: [...] } che un array diretto
     conversations.value = Array.isArray(data)
       ? data
       : (data.conversations || [])
@@ -106,7 +106,7 @@ async function loadConversations() {
   }
 }
 
-// For now this only navigates; we will create Conversation view later
+// Apri conversazione → la pagina ConversationView la abbiamo già creata
 function openConversation(c) {
   const chatId = c.chatId ?? c.id
   if (!chatId) return
