@@ -622,6 +622,42 @@ paths:
         "404": { $ref: "#/components/responses/NotFoundError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
 
+  /media:
+    post:
+      tags: [media]
+      summary: Upload a media file to be used in messages
+      description: |
+        Uploads an image or GIF and returns a public URL that can be used as mediaUrl in messages.
+      operationId: uploadMedia
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Media file to upload.
+      responses:
+        "201":
+          description: Media uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: url
+                    description: Public URL of the uploaded media.
+                required: [url]
+        "400": { $ref: "#/components/responses/BadRequestError" }
+        "401": { $ref: "#/components/responses/UnauthorizedError" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
 components:
   securitySchemes:
     bearerAuth:
