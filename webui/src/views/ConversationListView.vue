@@ -2,42 +2,52 @@
   <div class="pt-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
+
       <button
         type="button"
         class="btn btn-sm btn-outline-secondary"
         @click="loadConversations"
         :disabled="loading"
       >
-        Reload
+        <span v-if="loading">Reloading…</span>
+        <span v-else>Reload</span>
       </button>
     </div>
 
+    <!-- Error -->
     <ErrorMsg v-if="error" :msg="error" />
 
+    <!-- Loading -->
     <LoadingSpinner :loading="loading">
-      <div v-if="!loading && !error && conversations.length === 0">
-        <p class="text-muted mb-0">You do not have any conversations yet.</p>
+      <!-- Empty -->
+      <div 
+        v-if="!loading && !error && conversations.length === 0"
+        class="text-muted"
+      >
+        You do not have any conversations yet.
       </div>
 
+      <!-- List -->
       <ul
         v-else
         class="list-group"
       >
         <li
-          v-for="conv in conversations"
-          :key="conv.id"
-          class="list-group-item d-flex flex-column"
+          v-for="c in conversations"
+          :key="c.chatId ?? c.id"
+          class="list-group-item list-group-item-action d-flex flex-column"
+          @click="openConversation(c)"
         >
           <div class="fw-semibold">
-            {{ conv.title || ('Chat ' + conv.id) }}
+            {{ getTitle(c) }}
           </div>
 
           <small
-            v-if="conv.lastMessage"
+            v-if="c.lastMessage"
             class="text-muted"
           >
-            {{ conv.lastMessage.text || '[' + conv.lastMessage.kind + ']' }}
-            · {{ conv.lastMessage.createdAt }}
+            {{ c.lastMessage.text || '[' + c.lastMessage.kind + ']' }}
+            · {{ c.lastMessage.createdAt }}
           </small>
         </li>
       </ul>
@@ -47,25 +57,53 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getMyConversations } from '../services/api.js'
 
+const router = useRouter()
 const conversations = ref([])
 const loading = ref(false)
 const error = ref('')
 
+// Titolo robusto (alcune API hanno name, altre title, altre chatName…)
+function getTitle(c) {
+  return (
+    c.title ||
+    c.name ||
+    c.chatName ||
+    `Chat ${c.id ?? c.chatId}`
+  )
+}
+
+// Carica conversazioni
 async function loadConversations() {
   loading.value = true
   error.value = ''
 
   try {
     const data = await getMyConversations()
-    conversations.value = data.conversations ?? []
+
+    // Le API del prof cambiano forma -> questa riga gestisce tutto
+    conversations.value = Array.isArray(data)
+      ? data
+      : (data.conversations || [])
   } catch (e) {
     console.error(e)
     error.value = e.message || 'Failed to load conversations.'
   } finally {
     loading.value = false
   }
+}
+
+// Apri conversazione → la pagina la creiamo step 3
+function openConversation(c) {
+  const chatId = c.chatId ?? c.id
+  if (!chatId) return
+
+  router.push({
+    name: 'Conversation',
+    params: { chatId }
+  })
 }
 
 onMounted(() => {
@@ -75,6 +113,6 @@ onMounted(() => {
 
 <style scoped>
 .list-group-item {
-  cursor: default;
+  cursor: pointer;
 }
 </style>
