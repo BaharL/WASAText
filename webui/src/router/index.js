@@ -1,42 +1,59 @@
-// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import { isAuthenticated } from '../services/api.js'
 
+/*
+ * Application routes
+ */
 const routes = [
   {
     path: '/login',
     name: 'Login',
     component: LoginView
   },
+
   {
     path: '/',
     name: 'Home',
-    // صفحه‌ی لیست گفتگوها (Conversations)
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
+
+  /*
+   * Single conversation page
+   * /conversations/:chatId
+   *
+   * props: true → enables passing chatId to the component as a prop
+   */
   {
-    // صفحه‌ی یک گفتگوی مشخص
     path: '/conversations/:chatId',
-    name: 'Conversation',                // ⬅ همینی که در router.push استفاده می‌کنیم
+    name: 'Conversation',
     component: () => import('../views/ConversationView.vue'),
     props: true,
     meta: { requiresAuth: true }
   },
+
+  // Fallback route → redirect unknown paths to Home
   {
-    // fallback: هر آدرس اشتباه → Home
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
 ]
 
+/*
+ * Create Vue Router instance
+ */
 const router = createRouter({
   history: createWebHistory(),
   routes
 })
 
-// Guardia: se non ho token → /login
+/*
+ * Global navigation guard:
+ *
+ * - If a route requires authentication and user has no token → redirect to /login
+ * - If user is already logged in and tries to access /login → redirect to Home
+ */
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated()) {
     next({ name: 'Login' })
