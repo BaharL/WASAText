@@ -10,26 +10,26 @@ const routes = [
     component: LoginView
   },
   {
-    // Redirect root "/" to conversations list
+    // HOME: all conversations (direct + groups together)
     path: '/',
-    redirect: { name: 'Conversations' }
-  },
-  {
-    // All conversations (default list)
-    path: '/conversations',
-    name: 'Conversations',
+    name: 'Home',
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
   {
-    // Only direct (1-to-1) conversations
+    // Redirect /conversations -> Home (so both URLs work)
+    path: '/conversations',
+    redirect: { name: 'Home' }
+  },
+  {
+    // Only direct / personal chats
     path: '/conversations/direct',
     name: 'DirectConversations',
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
   {
-    // Only group conversations
+    // Only group chats
     path: '/conversations/groups',
     name: 'GroupConversations',
     component: () => import('../views/ConversationListView.vue'),
@@ -44,9 +44,9 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    // Fallback: any unknown route → conversations list
+    // Fallback: any unknown route → Home
     path: '/:pathMatch(.*)*',
-    redirect: { name: 'Conversations' }
+    redirect: { name: 'Home' }
   }
 ]
 
@@ -58,11 +58,11 @@ const router = createRouter({
 // Global navigation guard
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated()) {
-    // If route requires auth and user is not logged in → go to login
+    // Not logged → go to login
     next({ name: 'Login' })
   } else if (to.name === 'Login' && isAuthenticated()) {
-    // If user is already logged in and tries to go to login → redirect home
-    next({ name: 'Conversations' })
+    // Already logged → go to Home (all conversations)
+    next({ name: 'Home' })
   } else {
     next()
   }
