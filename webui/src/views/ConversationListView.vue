@@ -3,15 +3,27 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
 
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-secondary"
-        :disabled="loading"
-        @click="loadConversations"
-      >
-        <span v-if="loading">Reloading…</span>
-        <span v-else>Reload</span>
-      </button>
+      <div class="btn-group"> <!-- NEW: gruppo bottoni -->
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          :disabled="loading"
+          @click="loadConversations"
+        >
+          <span v-if="loading">Reloading…</span>
+          <span v-else>Reload</span>
+        </button>
+
+        <!-- NEW: crea una nuova chat -->
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          :disabled="loading"
+          @click="createNewConversation"
+        >
+          + New chat
+        </button>
+      </div>
     </div>
 
     <!-- Error -->
@@ -101,6 +113,46 @@ async function loadConversations() {
   } catch (e) {
     console.error(e)
     error.value = e.message || 'Failed to load conversations.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// NEW: crea una nuova conversazione (group) e la apre
+async function createNewConversation() {
+  try {
+    loading.value = true
+    error.value = ''
+
+    const token = getToken()
+    const headers = {}
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    // per ora nome fisso "New chat", senza specificare membri
+    const response = await axios.post(
+      '/groups',
+      { name: 'New chat', members: [] },
+      { headers }
+    )
+
+    const data = response.data      // ci aspettiamo { chatId: ... }
+
+    // ricarica la lista
+    await loadConversations()
+
+    // se c'è chatId, vai direttamente alla pagina della chat
+    if (data && data.chatId) {
+      router.push({
+        name: 'Conversation',
+        params: { chatId: data.chatId }
+      })
+    }
+  } catch (e) {
+    console.error(e)
+    error.value = e.message || 'Failed to create conversation.'
   } finally {
     loading.value = false
   }
