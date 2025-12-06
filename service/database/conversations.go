@@ -11,6 +11,7 @@ import (
 type ConversationSummary struct {
 	ID          int64    `json:"id"`
 	Title       string   `json:"title"`
+	IsGroup		bool	 'json:"isGroup"'
 	LastMessage *Message `json:"lastMessage,omitempty"`
 }
 
