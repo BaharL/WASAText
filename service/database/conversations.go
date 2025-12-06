@@ -9,10 +9,10 @@ import (
 
 // ConversationSummary è il modello restituito da GET /conversations.
 type ConversationSummary struct {
-	ID          int64    `json:"id"`
-	Title       string   `json:"title"`
-	IsGroup		bool	 'json:"isGroup"'
-	LastMessage *Message `json:"lastMessage,omitempty"`
+    ID          int64    `json:"id"`
+    Title       string   `json:"title"`
+    IsGroup     bool     `json:"isGroup"` 
+    LastMessage *Message `json:"lastMessage,omitempty"`
 }
 
 // ListUserConversations restituisce tutte le conversazioni a cui partecipa l’utente,
