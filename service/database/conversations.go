@@ -30,12 +30,13 @@ func (db *appdbimpl) ListUserConversations(
 		SELECT
 			c.id,
 			COALESCE(c.name, printf('Chat %d', c.id)) AS title,
+			c.type,
 			MAX(m.id) AS last_message_id
 		FROM conversations c
 		JOIN conversation_members cm ON cm.conversation_id = c.id
 		LEFT JOIN messages m ON m.chat_id = c.id
 		WHERE cm.user_id = ?
-		GROUP BY c.id, title
+		GROUP BY c.id, title, c.type
 		ORDER BY last_message_id DESC, c.id DESC
 	`, userID)
 	if err != nil {
@@ -48,15 +49,22 @@ func (db *appdbimpl) ListUserConversations(
 	for rows.Next() {
 		var conv ConversationSummary
 		var lastMsgID sql.NullInt64
+		var convType sql.NullString
 
-		if err := rows.Scan(&conv.ID, &conv.Title, &lastMsgID); err != nil {
+		if err := rows.Scan(&conv.ID, &conv.Title, &convType, &lastMsgID); err != nil {
 			return nil, fmt.Errorf("scan user conversations: %w", err)
+		}
+
+		// NEW: isGroup basato su conversations.type
+		if convType.Valid && convType.String == "group" {
+			conv.IsGroup = true
+		} else {
+			conv.IsGroup = false
 		}
 
 		if lastMsgID.Valid {
 			lastMsg, err := db.getMessageByID(ctx, lastMsgID.Int64)
 			if err != nil {
-				// se il messaggio è sparito, lascio LastMessage vuoto ma non blocco tutto
 				if !errors.Is(err, sql.ErrNoRows) {
 					return nil, fmt.Errorf("load last message for conversation %d: %w", conv.ID, err)
 				}
