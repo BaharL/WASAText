@@ -104,7 +104,11 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
  * Clear token and effectively log out on the client side.
  */
 export function logout() {
-  clearToken()
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('userPhoto')
+  localStorage.removeItem('theme')
+  localStorage.removeItem('lastChat')
 }
 
 /* ----------------------------------------------------------------------
