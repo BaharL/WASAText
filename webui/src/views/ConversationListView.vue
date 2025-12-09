@@ -178,7 +178,7 @@ import LoadingSpinner from '../components/LoadingSpinner.vue'
 // axios instance (inside the component, as you preferred)
 import axios from '../services/axios.js'
 // reuse getToken + listUsers for consistent Authorization header
-import { getToken, listUsers } from '../services/api.js'
+import { getToken, listUsers, logout } from '../services/api.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -432,14 +432,8 @@ function handleChangePhoto() {
 
 // Logout → clear localStorage + go to Login
 function handleLogout() {
-  try {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('username')
-    localStorage.removeItem('userIdentifier')
-  } catch (_) {
-    // ignore
-  }
-
+  logout()
+  accountUsername.value = ''
   router.push({ name: 'Login' })
 }
 
