@@ -90,12 +90,13 @@ func (db *appdbimpl) ListConversationMessages(
 	userIdentifier string,
 	conversationID int64,
 ) ([]Message, error) {
+	// Trovo l'ID interno dell'utente corrente
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return nil, err
 	}
 
-	// controllo che l’utente faccia parte della conversazione
+	// Controllo che l’utente faccia parte della conversazione
 	var exists int
 	err = db.c.QueryRowContext(ctx, `
 		SELECT 1
@@ -109,15 +110,24 @@ func (db *appdbimpl) ListConversationMessages(
 		return nil, fmt.Errorf("check conversation membership: %w", err)
 	}
 
+	// Carico i messaggi + nome del mittente
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
-			id, chat_id, sender_id, kind,
-			text, media_url,
-			reply_to_message_id, forwarded_from_message_id,
-			status, datetime(created_at) AS created_at
-		FROM messages
-		WHERE chat_id = ?
-		ORDER BY created_at ASC, id ASC
+			m.id,
+			m.chat_id,
+			m.sender_id,
+			u.name AS sender_name,
+			m.kind,
+			m.text,
+			m.media_url,
+			m.reply_to_message_id,
+			m.forwarded_from_message_id,
+			m.status,
+			datetime(m.created_at) AS created_at
+		FROM messages m
+		JOIN users u ON u.id = m.sender_id
+		WHERE m.chat_id = ?
+		ORDER BY m.created_at ASC, m.id ASC
 	`, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("list conversation messages: %w", err)
@@ -130,11 +140,13 @@ func (db *appdbimpl) ListConversationMessages(
 		var m Message
 		var text, mediaURL sql.NullString
 		var replyID, fwdID sql.NullInt64
+		var senderName sql.NullString
 
 		if err := rows.Scan(
 			&m.ID,
 			&m.ChatID,
 			&m.SenderID,
+			&senderName,
 			&m.Kind,
 			&text,
 			&mediaURL,
@@ -144,6 +156,10 @@ func (db *appdbimpl) ListConversationMessages(
 			&m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan conversation messages: %w", err)
+		}
+
+		if senderName.Valid {
+			m.SenderName = senderName.String
 		}
 
 		if text.Valid {
@@ -162,6 +178,9 @@ func (db *appdbimpl) ListConversationMessages(
 			v := fwdID.Int64
 			m.ForwardedFromMessageID = &v
 		}
+
+		// NEW: segno se è un messaggio dell'utente loggato
+		m.Mine = (m.SenderID == userID)
 
 		messages = append(messages, m)
 	}
