@@ -12,6 +12,7 @@ type Message struct {
 	ID                     int64   `json:"id"`
 	ChatID                 int64   `json:"chatId"`
 	SenderID               int64   `json:"senderId"`
+	SenderName            string  `json:"senderName"`
 	Kind                   string  `json:"kind"`
 	Text                   *string `json:"text,omitempty"`
 	MediaURL               *string `json:"mediaUrl,omitempty"`
@@ -19,6 +20,7 @@ type Message struct {
 	ForwardedFromMessageID *int64  `json:"forwardedFromMessageId,omitempty"`
 	Status                 string  `json:"status"`
 	CreatedAt              string  `json:"createdAt"`
+	Mine                  bool    `json:"mine"` 
 }
 
 // Reaction represents a reaction to a message.
