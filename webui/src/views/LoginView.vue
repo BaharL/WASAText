@@ -51,6 +51,10 @@ async function onSubmit() {
 
   try {
     await login(name.value);
+
+    // ⭐ NEW: salviamo anche lo username nel localStorage
+    localStorage.setItem('username', name.value);
+
     await router.push({ name: 'Home' });
   } catch (err) {
     console.error(err);
@@ -60,6 +64,7 @@ async function onSubmit() {
   }
 }
 </script>
+
 <style scoped>
 .login-page {
   min-height: calc(100vh - 80px);
