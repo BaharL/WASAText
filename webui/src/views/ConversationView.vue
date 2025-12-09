@@ -193,19 +193,15 @@ async function handleSend() {
       text
     }
 
-    const created = await sendMessage(payload)
+    // Inviamo il messaggio ma ignoriamo il contenuto di ritorno
+    await sendMessage(payload)
 
-    if (created && created.id) {
-      // API ritorna il messaggio creato → push
-      messages.value.push(created)
-    } else {
-      // se non torna nulla, ricarichiamo
-      await loadConversation()
-    }
-
+    // Svuoto l'input
     draft.value = ''
-    await nextTick()
-    scrollToBottom()
+
+    // Ricarico tutti i messaggi dal backend,
+    // così ho sempre senderName + mine corretti
+    await loadConversation()
   } catch (e) {
     console.error(e)
     error.value = e.message || 'Failed to send message.'
