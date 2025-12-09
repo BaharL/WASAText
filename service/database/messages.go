@@ -86,25 +86,46 @@ func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, err
 	var m Message
 	var text, mediaURL sql.NullString
 	var replyID, fwdID sql.NullInt64
+	var senderName sql.NullString
 
 	err := db.c.QueryRowContext(ctx, `
 		SELECT
-			id, chat_id, sender_id, kind,
-			text, media_url,
-			reply_to_message_id, forwarded_from_message_id,
-			status, datetime(created_at) as created_at
-		FROM messages
-		WHERE id = ?
+			m.id,
+			m.chat_id,
+			m.sender_id,
+			u.name AS sender_name,
+			m.kind,
+			m.text,
+			m.media_url,
+			m.reply_to_message_id,
+			m.forwarded_from_message_id,
+			m.status,
+			datetime(m.created_at) as created_at
+		FROM messages m
+		JOIN users u ON u.id = m.sender_id
+		WHERE m.id = ?
 	`, id).Scan(
-		&m.ID, &m.ChatID, &m.SenderID, &m.Kind,
-		&text, &mediaURL, &replyID, &fwdID,
-		&m.Status, &m.CreatedAt,
+		&m.ID,
+		&m.ChatID,
+		&m.SenderID,
+		&senderName,
+		&m.Kind,
+		&text,
+		&mediaURL,
+		&replyID,
+		&fwdID,
+		&m.Status,
+		&m.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Message{}, err
 		}
 		return Message{}, fmt.Errorf("cannot load message %d: %w", id, err)
+	}
+
+	if senderName.Valid {
+		m.SenderName = senderName.String
 	}
 
 	if text.Valid {
