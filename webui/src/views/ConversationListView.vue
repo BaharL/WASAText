@@ -1,20 +1,65 @@
 <template>
   <div class="pt-3">
-    <!-- Header: title + buttons -->
+    <!-- Header: title + account + new chat -->
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
 
-      <div class="btn-group">
-        <!-- Reload conversations -->
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          :disabled="loading"
-          @click="loadConversations"
-        >
-          <span v-if="loading">Reloading…</span>
-          <span v-else>Reload</span>
-        </button>
+      <div class="d-flex align-items-center gap-2">
+        <!-- Account / profile dropdown -->
+        <div class="dropdown">
+          <button
+            class="btn btn-sm btn-outline-secondary account-btn dropdown-toggle"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <span class="account-avatar">
+              {{ accountInitial }}
+            </span>
+            <span class="ms-1">
+              {{ accountUsername || 'Account' }}
+            </span>
+          </button>
+
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li class="dropdown-header">
+              Signed in as <strong>{{ accountUsername || 'unknown' }}</strong>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+
+            <li>
+              <button
+                type="button"
+                class="dropdown-item"
+                @click="handleChangeUsername"
+              >
+                Change username
+              </button>
+            </li>
+
+            <li>
+              <button
+                type="button"
+                class="dropdown-item"
+                @click="handleChangePhoto"
+              >
+                Change photo
+              </button>
+            </li>
+
+            <li><hr class="dropdown-divider"></li>
+
+            <li>
+              <button
+                type="button"
+                class="dropdown-item text-danger"
+                @click="handleLogout"
+              >
+                Logout
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <!-- Create a new group conversation -->
         <button
@@ -68,7 +113,7 @@
           class="list-group-item d-flex justify-content-between align-items-center"
         >
           <span>
-            {{ u.name }}
+            {{ u.username || u.name }}
             <small class="text-muted">({{ u.identifier }})</small>
           </span>
           <button
@@ -147,6 +192,13 @@ const userSearch = ref('')
 const searchingUsers = ref(false)
 const userSearchError = ref('')
 const userResults = ref([])
+
+// -------- Account / profile state --------
+const accountUsername = ref(localStorage.getItem('username') || '')
+const accountInitial = computed(() => {
+  const u = accountUsername.value
+  return u ? u.charAt(0).toUpperCase() : '?'
+})
 
 /**
  * Compute the conversations to show, based on current route:
@@ -298,8 +350,6 @@ async function handleUserSearch() {
  *
  * For now we create a group with that single user + me.
  * Backend: POST /groups with members = [ user.identifier ].
- * Depending on backend rules, this chat may be treated as "direct"
- * (2 members) or as "group"; our isGroup flag controls where it appears.
  */
 async function startDirectChat(user) {
   try {
@@ -317,7 +367,7 @@ async function startDirectChat(user) {
     const response = await axios.post(
       '/groups',
       {
-        name: user.name || 'Chat',
+        name: user.username || user.name || 'Chat',
         members: [user.identifier]
       },
       { headers }
@@ -343,6 +393,56 @@ async function startDirectChat(user) {
   }
 }
 
+/* ------------- Account actions ------------- */
+
+// Change username → PUT /users/username
+async function handleChangeUsername() {
+  const current = accountUsername.value || ''
+  const next = window.prompt('New username (3–16 chars):', current)
+  if (!next) return
+
+  const trimmed = next.trim()
+  if (!trimmed) return
+
+  try {
+    const token = getToken()
+    const headers = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    await axios.put(
+      '/users/username',
+      { username: trimmed },
+      { headers }
+    )
+
+    accountUsername.value = trimmed
+    localStorage.setItem('username', trimmed)
+  } catch (e) {
+    console.error(e)
+    window.alert(e.message || 'Failed to change username.')
+  }
+}
+
+// Change photo → per ora solo stub (backend 501 Not Implemented)
+function handleChangePhoto() {
+  window.alert('Change photo is not implemented yet (server returns 501 - HW3).')
+}
+
+// Logout → clear localStorage + go to Login
+function handleLogout() {
+  try {
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('username')
+    localStorage.removeItem('userIdentifier')
+  } catch (_) {
+    // ignore
+  }
+
+  router.push({ name: 'Login' })
+}
+
 onMounted(() => {
   loadConversations()
 })
@@ -356,5 +456,26 @@ onMounted(() => {
 /* Optional: style for user search results list */
 .user-results .list-group-item {
   cursor: default;
+}
+
+/* Account button */
+.account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Avatar tondo con iniziale */
+.account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background-color: #0d6efd;
+  color: #ffffff;
 }
 </style>
