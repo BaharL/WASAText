@@ -1,33 +1,26 @@
 <template>
   <!-- Our custom sidebar: does NOT conflict with dashboard.css -->
   <nav class="app-sidebar d-flex flex-column p-3">
-
     <!-- Main menu section -->
     <div>
       <h6 class="text-muted text-uppercase mb-3">Menu</h6>
-
       <ul class="nav flex-column">
         <li class="nav-item">
           <RouterLink to="/" class="nav-link">🏠 Home</RouterLink>
         </li>
-
         <li class="nav-item">
           <RouterLink to="/conversations" class="nav-link">💬 Conversations</RouterLink>
         </li>
-
         <li class="nav-item">
           <RouterLink to="/conversations/direct" class="nav-link">👤 Direct chats</RouterLink>
         </li>
-
         <li class="nav-item">
           <RouterLink to="/conversations/groups" class="nav-link">👥 Groups</RouterLink>
         </li>
       </ul>
     </div>
-
     <!-- Profile box stays at the bottom (mt-auto) -->
     <div class="profile-box mt-auto">
-
       <!-- Clickable profile header → go to Account page -->
       <button
         type="button"
@@ -36,7 +29,6 @@
       >
         <div class="d-flex align-items-center">
           <div class="profile-avatar">{{ profileInitial }}</div>
-
           <div class="ms-2">
             <div class="small text-muted">Signed in as</div>
             <div class="fw-semibold">{{ profileUsername || 'unknown' }}</div>
@@ -44,7 +36,6 @@
           </div>
         </div>
       </button>
-
       <!-- Logout button -->
       <button
         type="button"
@@ -54,7 +45,6 @@
         Logout
       </button>
     </div>
-
   </nav>
 </template>
 
@@ -67,7 +57,6 @@
  * - Clicking profile opens AccountView.
  * - Logout clears local storage and returns to Login.
  */
-
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { logout } from '../services/api.js'
@@ -97,15 +86,27 @@ function handleLogout() {
 </script>
 
 <style scoped>
-/* No conflict: uses .app-sidebar instead of .sidebar */
+/* 🔹 FIXED positioning come il template originale */
 .app-sidebar {
+  position: fixed;
+  top: 60px; /* Sotto la navbar */
+  bottom: 0;
+  left: 0;
   width: 220px;
   border-right: 1px solid #ddd;
   background: #fff;
-  min-height: calc(100vh - 60px); /* full height minus top navbar */
-  padding-top: 1.5rem;            /* nice spacing below navbar */
+  padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
+  overflow-y: auto; /* Scrollabile se il contenuto è troppo lungo */
+  z-index: 50;
+}
+
+/* 🔹 Nasconde la sidebar su mobile */
+@media (max-width: 767.98px) {
+  .app-sidebar {
+    display: none;
+  }
 }
 
 /* Menu links */
@@ -113,14 +114,21 @@ function handleLogout() {
   color: #333;
   padding: 6px 0;
 }
+
 .nav-link.router-link-active {
   font-weight: bold;
+  color: #2470dc;
+}
+
+.nav-link:hover {
+  color: #2470dc;
 }
 
 /* Profile section */
 .profile-box {
   border-top: 1px solid #e0e0e0;
-  padding-top: 12rem;
+  padding-top: 1.2rem; /* 🔹 CAMBIATO: da 12rem a 1.2rem */
+  margin-top: auto; /* Spinge il profilo in fondo */
 }
 
 .profile-header {
