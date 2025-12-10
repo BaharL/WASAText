@@ -1,5 +1,5 @@
 <template>
-  <div class="pt-1">
+  <div class="conversation-list-root">
     <!-- Header: title + new chat -->
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
@@ -331,8 +331,6 @@ async function startDirectChat(user) {
 onMounted(() => {
   loadConversations()
 })
-</script>
-
 <style scoped>
 .list-group-item {
   cursor: pointer;
@@ -342,4 +340,15 @@ onMounted(() => {
 .user-results .list-group-item {
   cursor: default;
 }
+
+/* 🔹 Allineo il contenuto più in alto */
+.conversation-list-root {
+  padding-top: 0; /* niente spazio extra sopra */
+}
+
+/* 🔹 Tolgo il margine-top di default dell'h1 per non farlo scendere */
+.conversation-list-root h1.h2 {
+  margin-top: 0;
+}
 </style>
+
