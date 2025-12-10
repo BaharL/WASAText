@@ -1,5 +1,5 @@
 <template>
-  <!-- AGGIUNGI pt-3 QUI -->
+  <!-- Aggiunto pt-4 per distanziarlo dalla navbar -->
   <nav class="sidebar d-flex flex-column p-3 pt-4">
     <!-- Main menu links -->
     <div>
@@ -34,29 +34,32 @@
 
     <!-- Profile box at the bottom -->
     <div class="profile-box mt-auto">
-      <div class="d-flex align-items-center mb-2">
-        <div class="profile-avatar">
-          {{ profileInitial }}
-        </div>
-        <div class="ms-2">
-          <div class="small text-muted">Signed in as</div>
-          <div class="fw-semibold">
-            {{ profileUsername || 'unknown' }}
+      <!-- Cliccando su questo blocco vai alla pagina Account -->
+      <button
+        type="button"
+        class="profile-btn w-100 text-start"
+        @click="goToAccount"
+      >
+        <div class="d-flex align-items-center">
+          <div class="profile-avatar">
+            {{ profileInitial }}
+          </div>
+          <div class="ms-2">
+            <div class="small text-muted">Signed in as</div>
+            <div class="fw-semibold">
+              {{ profileUsername || 'unknown' }}
+            </div>
+            <div class="text-muted small">
+              Profile &amp; settings
+            </div>
           </div>
         </div>
-      </div>
-
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-secondary w-100 mb-1"
-        @click="handleChangeUsername"
-      >
-        Change username
       </button>
 
+      <!-- Solo logout rimane nel sidebar -->
       <button
         type="button"
-        class="btn btn-sm btn-outline-danger w-100"
+        class="btn btn-sm btn-outline-danger w-100 mt-2"
         @click="handleLogout"
       >
         Logout
@@ -70,13 +73,14 @@
  * Sidebar.vue
  * ----------
  * - Shows navigation links for logged-in users.
- * - Displays a bigger profile box (avatar + username + actions) at the bottom.
+ * - Displays a bigger profile box (avatar + username) at the bottom.
+ * - Clicking the profile box opens the Account page.
  * - Visible only when the current route is NOT "Login" (controlled by App.vue).
  */
 
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { setMyUserName, logout } from '../services/api.js'
+import { logout } from '../services/api.js'
 
 const router = useRouter()
 
@@ -89,23 +93,9 @@ const profileInitial = computed(() => {
   return u ? u.charAt(0).toUpperCase() : '?'
 })
 
-// Change username → calls PUT /users/username via api.js
-async function handleChangeUsername() {
-  const current = profileUsername.value || ''
-  const next = window.prompt('New username (3–16 chars):', current)
-  if (!next) return
-
-  const trimmed = next.trim()
-  if (!trimmed) return
-
-  try {
-    await setMyUserName(trimmed)
-    profileUsername.value = trimmed
-    localStorage.setItem('username', trimmed)
-  } catch (e) {
-    console.error(e)
-    window.alert(e.message || 'Failed to change username.')
-  }
+// Navigate to Account page
+function goToAccount() {
+  router.push({ name: 'Account' })
 }
 
 // Logout → clear localStorage (via api.logout) + go to Login page
@@ -121,17 +111,10 @@ function handleLogout() {
 
 <style scoped>
 .sidebar {
-  /* override del vecchio dashboard.css */
-  position: static;        /* prima era fixed nel template */
-  top: auto;
-  bottom: auto;
-
   border-right: 1px solid #ddd;
   min-height: calc(100vh - 60px);
-
-  /* un po' di padding orizzontale */
-  padding-left: 1rem;
-  padding-right: 1rem;
+  /* meno spazio sotto → il box scende più giù */
+  padding-bottom: 0.5rem;
 }
 
 .nav-link {
@@ -149,6 +132,19 @@ function handleLogout() {
   padding-top: 0.75rem;
 }
 
+/* Bottone che contiene avatar + testo (senza bordo "button") */
+.profile-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.profile-btn:focus {
+  outline: none;
+}
+
+/* Avatar tondo */
 .profile-avatar {
   width: 60px;
   height: 60px;
