@@ -2,7 +2,6 @@
   <div id="app">
     <!-- Top navbar sempre visibile -->
     <AppNavbar />
-
     <!-- Corpo dell'app: push sotto la navbar -->
     <div class="app-body container-fluid">
       <div class="row">
@@ -11,7 +10,6 @@
           v-if="showSidebar"
           class="col-md-2 col-lg-2 d-none d-md-block p-0"
         />
-
         <!-- Contenuto principale -->
         <main :class="mainClass">
           <RouterView />
@@ -28,10 +26,8 @@
  * - Sidebar nascosta solo su route "Login"
  * - Spazio sotto la navbar per non sovrapporre il contenuto
  */
-
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-
 import AppNavbar from './components/AppNavbar.vue'
 import Sidebar from './components/Sidebar.vue'
 
@@ -41,19 +37,21 @@ const route = useRoute()
 const showSidebar = computed(() => route.name !== 'Login')
 
 // Colonna principale: larghezza diversa se la sidebar c'è o no
+// 🔹 AGGIUNTO col-12 per gestire correttamente gli schermi piccoli
 const mainClass = computed(() =>
   showSidebar.value
-    ? 'col-md-10 col-lg-10 ms-sm-auto px-md-4'
+    ? 'col-12 col-md-10 col-lg-10 ms-sm-auto px-md-4'
     : 'col-12 px-0'
 )
 </script>
 
 <style scoped>
+/* Spinge tutto il layout sotto la navbar */
 .app-body {
   padding-top: 60px; /* Altezza della navbar */
 }
 
 main {
-  padding-top: 1rem; /* Piccolo spazio dall'alto */
+  padding-top: 1rem;
 }
 </style>
