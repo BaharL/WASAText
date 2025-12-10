@@ -1,6 +1,5 @@
 <template>
-  <!-- Aggiunto pt-4 per distanziarlo dalla navbar -->
-  <nav class="sidebar d-flex flex-column p-3 pt-4">
+  <nav class="sidebar d-flex flex-column p-3">
     <!-- Main menu links -->
     <div>
       <h6 class="text-muted text-uppercase mb-2">Menu</h6>
@@ -34,10 +33,10 @@
 
     <!-- Profile box at the bottom -->
     <div class="profile-box mt-auto">
-      <!-- Cliccando su questo blocco vai alla pagina Account -->
+      <!-- Clickable header → va alla pagina Account -->
       <button
         type="button"
-        class="profile-btn w-100 text-start"
+        class="profile-header btn btn-link p-0 text-start w-100"
         @click="goToAccount"
       >
         <div class="d-flex align-items-center">
@@ -49,14 +48,11 @@
             <div class="fw-semibold">
               {{ profileUsername || 'unknown' }}
             </div>
-            <div class="text-muted small">
-              Profile &amp; settings
-            </div>
+            <div class="small text-primary">Profile &amp; settings</div>
           </div>
         </div>
       </button>
 
-      <!-- Solo logout rimane nel sidebar -->
       <button
         type="button"
         class="btn btn-sm btn-outline-danger w-100 mt-2"
@@ -72,10 +68,9 @@
 /**
  * Sidebar.vue
  * ----------
- * - Shows navigation links for logged-in users.
- * - Displays a bigger profile box (avatar + username) at the bottom.
- * - Clicking the profile box opens the Account page.
- * - Visible only when the current route is NOT "Login" (controlled by App.vue).
+ * - Mostra il menu a sinistra per gli utenti loggati.
+ * - Box profilo in fondo: avatar + nome + link a pagina Account.
+ * - Logout pulisce il token e torna alla pagina Login.
  */
 
 import { computed, ref } from 'vue'
@@ -84,21 +79,21 @@ import { logout } from '../services/api.js'
 
 const router = useRouter()
 
-// Local profile state (read from localStorage on first load)
+// Local profile state (letto da localStorage al primo load)
 const profileUsername = ref(localStorage.getItem('username') || '')
 
-// Initial letter for avatar circle
+// Iniziale per l’avatar tondo
 const profileInitial = computed(() => {
   const u = profileUsername.value
   return u ? u.charAt(0).toUpperCase() : '?'
 })
 
-// Navigate to Account page
+// Vai alla pagina Account
 function goToAccount() {
   router.push({ name: 'Account' })
 }
 
-// Logout → clear localStorage (via api.logout) + go to Login page
+// Logout → clear localStorage (via api.logout) + torna a Login
 function handleLogout() {
   try {
     logout()
@@ -112,9 +107,8 @@ function handleLogout() {
 <style scoped>
 .sidebar {
   border-right: 1px solid #ddd;
-  min-height: calc(100vh - 60px);
-  /* meno spazio sotto → il box scende più giù */
-  padding-bottom: 0.5rem;
+  min-height: calc(100vh - 60px); /* altezza viewport meno navbar */
+  padding-bottom: 0;              /* niente spazio extra sotto */
 }
 
 .nav-link {
@@ -132,22 +126,18 @@ function handleLogout() {
   padding-top: 0.75rem;
 }
 
-/* Bottone che contiene avatar + testo (senza bordo "button") */
-.profile-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+/* Bottone “header” del profilo senza look da bottone */
+.profile-header {
+  text-decoration: none;
 }
 
-.profile-btn:focus {
-  outline: none;
+.profile-header:hover .profile-avatar {
+  opacity: 0.9;
 }
 
-/* Avatar tondo */
 .profile-avatar {
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   background: #0d6efd;
   color: #fff;
