@@ -2,8 +2,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import { isAuthenticated } from '../services/api.js'
+import AccountView from '../views/AccountView.vue'
 
 const routes = [
+  {
+  path: '/account',
+  name: 'Account',
+  component: AccountView
+  },
   {
     path: '/login',
     name: 'Login',
