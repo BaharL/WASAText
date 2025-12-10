@@ -23,9 +23,9 @@ body {
   left: 0;
 
   /* Height offset for the navbar above */
-  padding: 4px 0 0;
+  padding: 48px 0 0;
 
-  z-index: 100; /* placed behind top navbar */
+  z-index: 50; /* placed behind top navbar */
   box-shadow: inset -1px 0 0 rgba(0 0 0 / 10%);
 }
 
