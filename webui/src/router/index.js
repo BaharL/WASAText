@@ -6,9 +6,10 @@ import AccountView from '../views/AccountView.vue'
 
 const routes = [
   {
-  path: '/account',
-  name: 'Account',
-  component: AccountView
+    path: '/account',
+    name: 'Account',
+    component: AccountView
+    meta: { requiresAuth: true}
   },
   {
     path: '/login',
