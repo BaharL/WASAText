@@ -331,6 +331,8 @@ async function startDirectChat(user) {
 onMounted(() => {
   loadConversations()
 })
+</script>
+  
 <style scoped>
 .list-group-item {
   cursor: pointer;
