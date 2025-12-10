@@ -1,5 +1,5 @@
 <template>
-  <div class="pt-3">
+  <div class="pt-1">
     <!-- Header: title + new chat -->
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
