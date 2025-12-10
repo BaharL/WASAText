@@ -108,7 +108,7 @@ function handleLogout() {
 .sidebar {
   border-right: 1px solid #ddd;
   min-height: calc(100vh - 60px); /* altezza viewport meno navbar */
-  padding-top:1.5rem;
+  padding-top:5rem;
   padding-bottom: 0;              
 }
 
