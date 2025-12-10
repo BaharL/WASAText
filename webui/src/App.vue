@@ -52,6 +52,6 @@ const mainClass = computed(() =>
 }
 
 main {
-  padding-top: 1rem;
+  padding-top: 0.5rem;
 }
 </style>
