@@ -49,10 +49,19 @@ const mainClass = computed(() =>
 </script>
 
 <style scoped>
-/* Spinge tutto il layout sotto la navbar (alta ~60px) */
+/* Spinge tutto il layout sotto la navbar */
 .app-body {
   padding-top: 6px;
 }
+  
+/* 🔹 IMPORTANTISSIMO:
+   annullo il padding-top che arriva dal template sul <main> */
+main {
+  padding-top: 0; /* prova così, poi se è troppo attaccato lo alziamo un po' */
+}
+
+/* Il resto del layout è gestito da dashboard.css / main.css */
+</style>
 
 /* Il resto del layout è gestito da dashboard.css / main.css */
 </style>
