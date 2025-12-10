@@ -1,5 +1,6 @@
 <template>
-  <nav class="sidebar d-flex flex-column p-3">
+  <!-- AGGIUNGI pt-3 QUI -->
+  <nav class="sidebar d-flex flex-column p-3 pt-4">
     <!-- Main menu links -->
     <div>
       <h6 class="text-muted text-uppercase mb-2">Menu</h6>
