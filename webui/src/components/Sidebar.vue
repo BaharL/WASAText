@@ -120,7 +120,7 @@ function handleLogout() {
 /* Profile section */
 .profile-box {
   border-top: 1px solid #e0e0e0;
-  padding-top: 8rem;
+  padding-top: 12rem;
 }
 
 .profile-header {
