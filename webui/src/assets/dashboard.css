@@ -15,16 +15,13 @@ body {
  * ⚠️ This affects ONLY elements with class .sidebar
  * We no longer use this class in Sidebar.vue to avoid conflicts.
  */
-
 .sidebar {
   position: fixed;
-  top: 0;
+  top: 60px; /* 🔹 CAMBIATO: da 0 a 60px (altezza navbar) */
   bottom: 0;
   left: 0;
-
   /* Height offset for the navbar above */
   padding: 48px 0 0;
-
   z-index: 50; /* placed behind top navbar */
   box-shadow: inset -1px 0 0 rgba(0 0 0 / 10%);
 }
@@ -32,13 +29,13 @@ body {
 /* Mobile sidebar offset */
 @media (max-width: 767.98px) {
   .sidebar {
-    top: 5rem; /* Extra spacing on small screens */
+    top: 60px; /* 🔹 CAMBIATO: da 5rem a 60px per consistenza */
   }
 }
 
 /* Scrollable sidebar content */
 .sidebar-sticky {
-  height: calc(100vh - 48px);
+  height: calc(100vh - 60px); /* 🔹 CAMBIATO: da 48px a 60px */
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -48,10 +45,12 @@ body {
   font-weight: 500;
   color: #333;
 }
+
 .sidebar .nav-link .feather {
   margin-right: 4px;
   color: #727272;
 }
+
 .sidebar .nav-link.active,
 .sidebar .router-link-active {
   color: #2470dc;
