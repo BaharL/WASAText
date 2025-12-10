@@ -150,8 +150,8 @@ function handleLogout() {
 }
 
 .profile-avatar {
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: #0d6efd;
   color: #fff;
