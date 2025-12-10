@@ -108,7 +108,8 @@ function handleLogout() {
 .sidebar {
   border-right: 1px solid #ddd;
   min-height: calc(100vh - 60px); /* altezza viewport meno navbar */
-  padding-bottom: 0;              /* niente spazio extra sotto */
+  padding-top:1.5rem;
+  padding-bottom: 0;              
 }
 
 .nav-link {
@@ -123,7 +124,7 @@ function handleLogout() {
 /* Profile box at bottom */
 .profile-box {
   border-top: 1px solid #e0e0e0;
-  padding-top: 0.75rem;
+  padding-top: 4rem;
 }
 
 /* Bottone “header” del profilo senza look da bottone */
