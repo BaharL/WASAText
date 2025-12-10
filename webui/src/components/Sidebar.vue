@@ -121,8 +121,17 @@ function handleLogout() {
 
 <style scoped>
 .sidebar {
+  /* override del vecchio dashboard.css */
+  position: static;        /* prima era fixed nel template */
+  top: auto;
+  bottom: auto;
+
   border-right: 1px solid #ddd;
   min-height: calc(100vh - 60px);
+
+  /* un po' di padding orizzontale */
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .nav-link {
