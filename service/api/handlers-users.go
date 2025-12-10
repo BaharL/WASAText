@@ -105,15 +105,89 @@ func (rt *_router) listUsers(
 }
 
 // -----------------------------------------------------------------------------
-// PUT /users/photo — Stub (HW3)
+// PUT /users/photo — Upload real profile photo
 // -----------------------------------------------------------------------------
 
 func (rt *_router) setMyPhoto(
-	w http.ResponseWriter,
-	r *http.Request,
-	_ httprouter.Params,
-	ctx reqcontext.RequestContext,
+    w http.ResponseWriter,
+    r *http.Request,
+    _ httprouter.Params,
+    ctx reqcontext.RequestContext,
 ) {
-	_ = ctx
-	w.WriteHeader(http.StatusNotImplemented)
+    // Verifica che l'utente sia autenticato
+    if ctx.UserIdentifier == "" {
+        writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
+        return
+    }
+
+    // Limite dimensione (es. 10 MB)
+    if err := r.ParseMultipartForm(10 << 20); err != nil {
+        writeJSON(w, http.StatusBadRequest, errorMsg("invalid multipart form"))
+        return
+    }
+
+    file, header, err := r.FormFile("file")
+    if err != nil {
+        writeJSON(w, http.StatusBadRequest, errorMsg("missing file field"))
+        return
+    }
+    defer file.Close()
+
+    // Tipo MIME dal header
+    contentType := header.Header.Get("Content-Type")
+    if contentType == "" {
+        // Prova a rilevarlo leggendo qualche byte
+        buf := make([]byte, 512)
+        n, _ := file.Read(buf)
+        contentType = http.DetectContentType(buf[:n])
+        // Riavvolgi lo stream
+        if _, err := file.Seek(0, io.SeekStart); err != nil {
+            writeJSON(w, http.StatusInternalServerError, errorMsg("cannot reset file reader"))
+            return
+        }
+    }
+
+    // Riutilizziamo i controlli di /media
+    if !isValidMediaType(contentType) {
+        writeJSON(w, http.StatusBadRequest, errorMsg("unsupported media type"))
+        return
+    }
+
+    ext := getExtensionFromContentType(contentType)
+    if ext == "" {
+        ext = filepath.Ext(header.Filename)
+    }
+    if ext == "" {
+        ext = ".bin"
+    }
+
+    // Crea cartella uploads/profiles se non esiste
+    if err := os.MkdirAll("./uploads/profiles", 0o755); err != nil {
+        writeJSON(w, http.StatusInternalServerError, errorMsg("cannot create profiles directory"))
+        return
+    }
+
+    // Salviamo la foto con nome basato sull'identifier dell'utente
+    filename := fmt.Sprintf("%s%s", ctx.UserIdentifier, ext)
+    dstPath := filepath.Join("./uploads/profiles", filename)
+
+    dst, err := os.Create(dstPath)
+    if err != nil {
+        writeJSON(w, http.StatusInternalServerError, errorMsg("cannot create destination file"))
+        return
+    }
+    defer dst.Close()
+
+    if _, err := io.Copy(dst, file); err != nil {
+        writeJSON(w, http.StatusInternalServerError, errorMsg("cannot save file"))
+        return
+    }
+
+    photoURL := "/uploads/profiles/" + filename
+
+    // Risposta: 200 + URL della foto
+    writeJSON(w, http.StatusOK, map[string]string{
+        "photoUrl": photoURL,
+    })
 }
+
