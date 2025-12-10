@@ -39,5 +39,8 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.PUT("/groups/:chatId/name", rt.wrap(rt.setGroupName))
 	rt.router.PUT("/groups/:chatId/photo", rt.wrap(rt.setGroupPhoto))
 
+	// --- MEDIA ---
+	rt.router.POST("/media", rt.uploadMedia)
+
 	return rt.router
 }
