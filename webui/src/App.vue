@@ -1,32 +1,40 @@
 <template>
   <div id="app">
+
     <!-- Top navbar is always visible -->
     <AppNavbar />
 
+    <!-- Spacer: pushes sidebar + content below the navbar -->
+    <div style="height: 60px;"></div>
+
     <div class="container-fluid">
       <div class="row">
-        <!-- Sidebar is hidden on Login page -->
+
+        <!-- Sidebar (hidden on Login page) -->
         <Sidebar
           v-if="showSidebar"
           class="col-md-2 col-lg-2 d-none d-md-block p-0"
         />
 
-        <!-- Main content area; full width when sidebar is hidden -->
+        <!-- Main content area -->
         <main :class="mainClass">
           <RouterView />
         </main>
+
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
 /**
- * App.vue is the layout controller of the whole app.
+ * App.vue is the root layout controller.
  * - Always shows the top navbar.
- * - Shows the sidebar only if the current route is not "Login".
- * - RouterView renders pages inside the main content area.
+ * - Shows the sidebar only when NOT on Login page.
+ * - Adds a spacing under navbar so the layout aligns correctly.
  */
+
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -35,10 +43,10 @@ import Sidebar from './components/Sidebar.vue'
 
 const route = useRoute()
 
-// We hide sidebar on login page
+// Sidebar only visible if NOT on Login page
 const showSidebar = computed(() => route.name !== 'Login')
 
-// Dynamic main column class when sidebar is present/absent
+// Dynamic main column depending on sidebar visibility
 const mainClass = computed(() =>
   showSidebar.value
     ? 'col-md-10 col-lg-10 ms-sm-auto px-md-4'
@@ -47,5 +55,5 @@ const mainClass = computed(() =>
 </script>
 
 <style scoped>
-/* Layout styles are mostly handled by dashboard.css / main.css */
+/* Layout styles come mostly from dashboard.css and main.css */
 </style>
