@@ -1,13 +1,17 @@
 package api
 
 import (
-	"encoding/json"
-	"net/http"
-	"regexp"
-	"strings"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "os"
+    "path/filepath"
+    "regexp"
+    "strings"
 
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
-	"github.com/julienschmidt/httprouter"
+    "git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
+    "github.com/julienschmidt/httprouter"
 )
 
 // -----------------------------------------------------------------------------
