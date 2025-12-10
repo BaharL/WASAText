@@ -66,8 +66,7 @@
           <div class="card-body">
             <h2 class="h5 mb-3">Profile photo</h2>
             <p class="text-muted small mb-2">
-              The backend for profile photos is not implemented yet (API returns 501).
-              You can still select a file to see the future behaviour.
+              Upload a profile picture (JPG/PNG, max 10 MB).
             </p>
 
             <input
@@ -85,8 +84,9 @@
               @click="onUploadPhoto"
             >
               <span v-if="uploadingPhoto">Uploading…</span>
-              <span v-else>Upload photo (stub)</span>
+              <span v-else>Upload photo</span>
             </button>
+
 
             <p
               v-if="photoMessage"
@@ -168,9 +168,10 @@ async function onUploadPhoto() {
   uploadingPhoto.value = true
 
   try {
-    // This will currently get 501 from backend (HW3 stub)
     await setMyPhoto(selectedPhoto.value)
-    photoMessage.value = 'Request sent (server currently returns 501 Not Implemented).'
+    // prima: photoMessage.value = 'Request sent (server currently returns 501 Not Implemented).'
+    photoMessage.value = 'Photo uploaded successfully.'
+    photoError.value = false
   } catch (e) {
     console.error(e)
     photoMessage.value = e.message || 'Upload failed.'
@@ -179,6 +180,7 @@ async function onUploadPhoto() {
     uploadingPhoto.value = false
   }
 }
+
 </script>
 
 <style scoped>
