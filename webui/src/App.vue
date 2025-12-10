@@ -1,18 +1,18 @@
 <template>
   <div id="app">
-    <!-- Top navbar (always visible) -->
+    <!-- Top navbar is always visible -->
     <AppNavbar />
 
     <div class="container-fluid">
       <div class="row">
-        <!-- Sidebar visible only when user is not on Login page -->
+        <!-- Sidebar is hidden on Login page -->
         <Sidebar
           v-if="showSidebar"
-          class="col-md-2 col-lg-2"
+          class="col-md-2 col-lg-2 d-none d-md-block p-0"
         />
 
-        <!-- Page content -->
-        <main :class="showSidebar ? 'col-md-10 col-lg-10' : 'col-12'">
+        <!-- Main content area; full width when sidebar is hidden -->
+        <main :class="mainClass">
           <RouterView />
         </main>
       </div>
@@ -22,12 +22,11 @@
 
 <script setup>
 /**
- * App.vue controls the global layout:
- * - Always shows the top AppNavbar.
- * - Shows the Sidebar only when current route is not "Login".
- * - Renders the active page via RouterView.
+ * App.vue is the layout controller of the whole app.
+ * - Always shows the top navbar.
+ * - Shows the sidebar only if the current route is not "Login".
+ * - RouterView renders pages inside the main content area.
  */
-
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -36,10 +35,17 @@ import Sidebar from './components/Sidebar.vue'
 
 const route = useRoute()
 
-// True if we should display the sidebar (not on Login page)
+// We hide sidebar on login page
 const showSidebar = computed(() => route.name !== 'Login')
+
+// Dynamic main column class when sidebar is present/absent
+const mainClass = computed(() =>
+  showSidebar.value
+    ? 'col-md-10 col-lg-10 ms-sm-auto px-md-4'
+    : 'col-12 px-0'
+)
 </script>
 
-<style>
-/* You can add global layout tweaks here if needed */
+<style scoped>
+/* Layout styles are mostly handled by dashboard.css / main.css */
 </style>
