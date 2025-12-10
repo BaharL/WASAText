@@ -20,6 +20,6 @@
 
 <style scoped>
 header {
-  height: 6px;
+  height: 60px;
 }
 </style>
