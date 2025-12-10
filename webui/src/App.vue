@@ -62,6 +62,3 @@ main {
 
 /* Il resto del layout è gestito da dashboard.css / main.css */
 </style>
-
-/* Il resto del layout è gestito da dashboard.css / main.css */
-</style>
