@@ -1,8 +1,8 @@
 <template>
   <!-- Our custom sidebar: does NOT conflict with dashboard.css -->
-  <nav class="app-sidebar d-flex flex-column p-3">
-    <!-- Main menu section -->
-    <div>
+  <nav class="app-sidebar d-flex flex-column">
+    <!-- Main menu section - scrollabile -->
+    <div class="menu-section">
       <h6 class="text-muted text-uppercase mb-3">Menu</h6>
       <ul class="nav flex-column">
         <li class="nav-item">
@@ -19,8 +19,9 @@
         </li>
       </ul>
     </div>
-    <!-- Profile box stays at the bottom (mt-auto) -->
-    <div class="profile-box mt-auto">
+
+    <!-- Profile box stays at the bottom - SEMPRE VISIBILE -->
+    <div class="profile-box">
       <!-- Clickable profile header → go to Account page -->
       <button
         type="button"
@@ -95,11 +96,16 @@ function handleLogout() {
   width: 220px;
   border-right: 1px solid #ddd;
   background: #fff;
-  padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
-  overflow-y: auto; /* Scrollabile se il contenuto è troppo lungo */
   z-index: 50;
+}
+
+/* 🔹 Sezione menu - scrollabile */
+.menu-section {
+  flex: 1; /* Occupa tutto lo spazio disponibile */
+  overflow-y: auto; /* Scrollabile se il menu è lungo */
+  padding: 1.5rem 1rem;
 }
 
 /* 🔹 Nasconde la sidebar su mobile */
@@ -124,11 +130,12 @@ function handleLogout() {
   color: #2470dc;
 }
 
-/* Profile section */
+/* 🔹 Profile section - SEMPRE IN BASSO, NON SCROLLA */
 .profile-box {
   border-top: 1px solid #e0e0e0;
-  padding-top: 1.2rem; /* 🔹 CAMBIATO: da 12rem a 1.2rem */
-  margin-top: auto; /* Spinge il profilo in fondo */
+  padding: 1rem;
+  background: #fff;
+  /* NON ha flex o margin-top auto perché la struttura flex lo mette automaticamente in fondo */
 }
 
 .profile-header {
