@@ -668,7 +668,7 @@ paths:
                     minLength: 1
                     maxLength: 2048
                 required: [url]
-              example:
+              examples:
                 ok:
                   summary: Example uploaded media response
                   value: 
