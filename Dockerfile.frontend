@@ -3,11 +3,17 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copio solo i file necessari per installare le dipendenze
+# 1) Enable Corepack + prepare Yarn 4.5.0 (as requested by package.json)
+RUN corepack enable \
+ && corepack prepare yarn@4.5.0 --activate
+
+# 2) Copio solo i file necessari per installare le dipendenze
 COPY webui/package.json webui/yarn.lock ./
+
+# 3) Ora `yarn install` usa Yarn 4.5.0, non la 1.22 globale
 RUN yarn install
 
-# Copio il resto del frontend
+# 4) Copio il resto del frontend
 COPY webui .
 
 # Build produzione
