@@ -667,8 +667,12 @@ paths:
                     description: Public URL of the uploaded media file.
                     minLength: 1
                     maxLength: 2048
-                    example: "/uploads/media/media_123.png"
                 required: [url]
+              example:
+                ok:
+                  summary: Example uploaded media response
+                  value: 
+                    url: "https://example.com/uploads/media/media_123.png"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
