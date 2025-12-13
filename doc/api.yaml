@@ -168,11 +168,19 @@ paths:
                     type: string
                     description: Confirmation message.
                     example: "Photo updated"
+                  photoUrl:
+                    type: string
+                    format: url
+                    description: Public URL of the updated profile photo.
+                    maxLength: 2048
+                required:
+                  - message
               examples:
                 ok:
                   summary: Example photo update result
                   value:
                     message: "Photo updated"
+                    photoUrl: "https://example.com/uploads/profile-223.png"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
@@ -635,12 +643,15 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              description: Payload containing the media file to upload.
               required: [file]
               properties:
                 file:
                   type: string
                   format: binary
                   description: Media file to upload.
+                  minLength: 1
+                  maxLength: 10485760
       responses:
         "201":
           description: Media uploaded
@@ -648,11 +659,14 @@ paths:
             application/json:
               schema:
                 type: object
+                description: Result of the media upload.
                 properties:
                   url:
                     type: string
                     format: url
-                    description: Public URL of the uploaded media.
+                    description: Public URL of the uploaded media file.
+                    minLength: 1
+                    maxLength: 2048
                 required: [url]
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
@@ -664,7 +678,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
+  
   parameters:
     ChatID:
       name: chatId
@@ -674,7 +688,7 @@ components:
       schema:
         type: integer
         example: 134
-
+    
     MessageID:
       name: messageId
       in: path
@@ -737,6 +751,12 @@ components:
           maxLength: 16
           pattern: "^[a-zA-Z0-9_-]+$"
           example: "mario"
+        photoUrl:
+          type: string
+          format: url
+          description: Profile photo URL.
+          maxLength: 2048
+
     
     Conversation:
       type: object
@@ -750,6 +770,11 @@ components:
           type: string
           description: Display title of the conversation
           example: "Chat 134"
+        photoUrl:
+          type: string
+          format: url
+          description: Optional URL of the conversation or group photo.
+          maxLength: 2048
         lastMessage:
           $ref: "#/components/schemas/Message"
 
