@@ -41,6 +41,7 @@ func (rt *_router) Handler() http.Handler {
 
 	// --- MEDIA ---
 	rt.router.POST("/media", rt.wrap(rt.uploadMedia))
+	rt.router.ServeFiles("/uploads/*filepath", http.Dir("./uploads"))
 
 	return rt.router
 }
