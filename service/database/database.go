@@ -19,6 +19,9 @@ type AppDatabase interface {
 	// SetUserName updates the user's name given their identifier.
 	SetUserName(ctx context.Context, identifier string, newName string) error
 
+	// GetName returns the username for the given identifier (Bearer token).
+	GetName(ctx context.Context, identifier string) (string, error)
+
 	// Search users by name (prefix / like)
 	SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
 
