@@ -9,6 +9,7 @@ func (rt *_router) Handler() http.Handler {
 	// Public routes
 	rt.router.GET("/", rt.getHelloWorld)
 	rt.router.GET("/liveness", rt.liveness)
+	rt.router.ServeFiles("/uploads/*filepath", http.Dir("./uploads"))
 
 	// Login (no auth)
 	rt.router.POST("/session", rt.doLogin)
@@ -41,7 +42,7 @@ func (rt *_router) Handler() http.Handler {
 
 	// --- MEDIA ---
 	rt.router.POST("/media", rt.wrap(rt.uploadMedia))
-	rt.router.ServeFiles("/uploads/*filepath", http.Dir("./uploads"))
+	
 
 	return rt.router
 }
