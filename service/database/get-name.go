@@ -1,8 +1,24 @@
 package database
 
-// GetName is an example that shows you how to query data
-func (db *appdbimpl) GetName() (string, error) {
+import (
+	"context"
+	"database/sql"
+)
+
+func (db *appdbimpl) GetName(ctx context.Context, identifier string) (string, error) {
 	var name string
-	err := db.c.QueryRow("SELECT name FROM example_table WHERE id=1").Scan(&name)
-	return name, err
+	err := db.c.QueryRowContext(ctx, `
+		SELECT name
+		FROM users
+		WHERE identifier = ?
+	`, identifier).Scan(&name)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", sql.ErrNoRows
+		}
+		return "", err
+	}
+
+	return name, nil
 }
