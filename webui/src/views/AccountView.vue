@@ -105,15 +105,16 @@
 <script setup>
 /**
  * AccountView.vue
- * ---------------
- * Page where the user can:
- * - View current username
- * - Change username (calls PUT /users/username)
- * - (Stub) select and upload a profile photo (PUT /users/photo → 501)
+ * - Change username
+ * - Upload profile photo
+ * - Sync photoUrl with sidebar
  */
 
 import { computed, ref } from 'vue'
 import { setMyUserName, setMyPhoto, getContext } from '../services/api.js'
+
+// ⚠️ backend ORIGIN (uguale a quello dell’API)
+const BACKEND_ORIGIN = 'http://localhost:3000'
 
 const username = ref(localStorage.getItem('username') || '')
 const newUsername = ref(username.value)
@@ -127,10 +128,9 @@ const uploadingPhoto = ref(false)
 const photoMessage = ref('')
 const photoError = ref(false)
 
-const initial = computed(() => {
-  const u = username.value
-  return u ? u.charAt(0).toUpperCase() : '?'
-})
+const initial = computed(() =>
+  username.value ? username.value.charAt(0).toUpperCase() : '?'
+)
 
 async function onChangeUsername() {
   usernameError.value = ''
@@ -144,6 +144,9 @@ async function onChangeUsername() {
     await setMyUserName(trimmed)
     username.value = trimmed
     localStorage.setItem('username', trimmed)
+
+    // aggiorna sidebar
+    window.dispatchEvent(new Event('profile-updated'))
     usernameSuccess.value = true
   } catch (e) {
     console.error(e)
@@ -154,8 +157,7 @@ async function onChangeUsername() {
 }
 
 function onPhotoSelected(event) {
-  const files = event.target.files
-  selectedPhoto.value = files && files[0] ? files[0] : null
+  selectedPhoto.value = event.target.files?.[0] || null
   photoMessage.value = ''
   photoError.value = false
 }
@@ -163,23 +165,32 @@ function onPhotoSelected(event) {
 async function onUploadPhoto() {
   if (!selectedPhoto.value) return
 
+  uploadingPhoto.value = true
   photoMessage.value = ''
   photoError.value = false
-  uploadingPhoto.value = true
 
   try {
+    // upload
     await setMyPhoto(selectedPhoto.value)
-    photoMessage.value = 'Photo uploaded successfully.'
-    photoError.value = false
 
-    // ✅ 1) rileggo il context per ottenere la nuova photoUrl
+    // rileggo context
     const ctx = await getContext()
-    if (ctx.photoUrl) localStorage.setItem('photoUrl', ctx.photoUrl)
-    else localStorage.removeItem('photoUrl')
-    
+
+    if (ctx.photoUrl) {
+      // 🔥 FIX FONDAMENTALE: URL ASSOLUTO
+      const absoluteUrl = ctx.photoUrl.startsWith('http')
+        ? ctx.photoUrl
+        : BACKEND_ORIGIN + ctx.photoUrl
+
+      localStorage.setItem('photoUrl', absoluteUrl)
+    } else {
+      localStorage.removeItem('photoUrl')
+    }
+
+    // aggiorna sidebar
     window.dispatchEvent(new Event('profile-updated'))
 
-
+    photoMessage.value = 'Photo uploaded successfully.'
   } catch (e) {
     console.error(e)
     photoMessage.value = e.message || 'Upload failed.'
@@ -188,8 +199,6 @@ async function onUploadPhoto() {
     uploadingPhoto.value = false
   }
 }
-
-
 </script>
 
 <style scoped>
