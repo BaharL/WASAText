@@ -183,6 +183,11 @@ export async function setMyPhoto(file) {
     data: formData
   })
 }
+// GET /context
+export async function getContext() {
+  return request('/context', { method: 'GET' })
+}
+
 
 /* ----------------------------------------------------------------------
  * CONVERSATIONS
