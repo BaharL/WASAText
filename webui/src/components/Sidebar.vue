@@ -1,7 +1,7 @@
 <template>
-  <!-- Our custom sidebar: does NOT conflict with dashboard.css -->
+  <!-- Custom sidebar -->
   <nav class="app-sidebar d-flex flex-column">
-    <!-- Main menu section - scrollabile -->
+    <!-- Menu -->
     <div class="menu-section">
       <h6 class="text-muted text-uppercase mb-3">Menu</h6>
       <ul class="nav flex-column">
@@ -20,16 +20,24 @@
       </ul>
     </div>
 
-    <!-- Profile box stays at the bottom - SEMPRE VISIBILE -->
+    <!-- Profile box (bottom) -->
     <div class="profile-box">
-      <!-- Clickable profile header → go to Account page -->
       <button
         type="button"
         class="profile-header btn btn-link p-0 text-start w-100"
         @click="goToAccount"
       >
         <div class="d-flex align-items-center">
-          <div class="profile-avatar">{{ profileInitial }}</div>
+          <div class="profile-avatar">
+            <img
+              v-if="profilePhotoUrl"
+              :src="profilePhotoUrl"
+              alt="avatar"
+              class="avatar-img"
+            />
+            <span v-else>{{ profileInitial }}</span>
+          </div>
+
           <div class="ms-2">
             <div class="small text-muted">Signed in as</div>
             <div class="fw-semibold">{{ profileUsername || 'unknown' }}</div>
@@ -37,7 +45,7 @@
           </div>
         </div>
       </button>
-      <!-- Logout button -->
+
       <button
         type="button"
         class="btn btn-sm btn-outline-danger w-100 mt-3"
@@ -52,38 +60,44 @@
 <script setup>
 /**
  * Sidebar.vue
- * -----------
- * - Custom sidebar - stili gestiti in dashboard.css
- * - Displays menu items + a bottom-aligned profile box.
- * - Clicking profile opens AccountView.
- * - Logout clears local storage and returns to Login.
+ * - Shows menu + user profile
+ * - Avatar = photo if present, otherwise first letter
+ * - Reads data from localStorage
  */
+
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { logout } from '../services/api.js'
 
 const router = useRouter()
 
-// Load username from localStorage
+// User data from localStorage
 const profileUsername = ref(localStorage.getItem('username') || '')
+const profilePhotoUrl = ref(localStorage.getItem('photoUrl') || '')
 
-// First letter for avatar circle
+// Initial letter fallback
 const profileInitial = computed(() =>
-  profileUsername.value ? profileUsername.value.charAt(0).toUpperCase() : '?'
+  profileUsername.value
+    ? profileUsername.value.charAt(0).toUpperCase()
+    : '?'
 )
 
-// Navigate to Account page
+// Go to account page
 function goToAccount() {
   router.push({ name: 'Account' })
 }
 
-// Logout + redirect to Login
+// Logout
 function handleLogout() {
   try {
     logout()
   } catch (_) {}
+
+  localStorage.removeItem('username')
+  localStorage.removeItem('photoUrl')
+
   router.push({ name: 'Login' })
 }
 </script>
 
-<!-- 🔹 Tutti gli stili sono ora in dashboard.css -->
+<!-- styles are in dashboard.css -->
