@@ -9,9 +9,6 @@
           <RouterLink to="/" class="nav-link">🏠 Home</RouterLink>
         </li>
         <li class="nav-item">
-          <RouterLink to="/conversations" class="nav-link">💬 Conversations</RouterLink>
-        </li>
-        <li class="nav-item">
           <RouterLink to="/conversations/direct" class="nav-link">👤 Direct chats</RouterLink>
         </li>
         <li class="nav-item">
@@ -100,21 +97,11 @@ function goToAccount() {
   router.push({ name: 'Account' })
 }
 
-// Logout
 function handleLogout() {
-  try {
-    logout()
-  } catch (_) {}
-
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('photoUrl')
-
-  // aggiorna anche la sidebar subito
-  syncProfileFromStorage()
-
+  try { logout() } catch (_) {}
   router.push({ name: 'Login' })
 }
+
 </script>
 
 <!-- styles are in dashboard.css -->
