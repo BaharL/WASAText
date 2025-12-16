@@ -113,7 +113,7 @@
  */
 
 import { computed, ref } from 'vue'
-import { setMyUserName, setMyPhoto } from '../services/api.js'
+import { setMyUserName, setMyPhoto, getContext } from '../services/api.js'
 
 const username = ref(localStorage.getItem('username') || '')
 const newUsername = ref(username.value)
