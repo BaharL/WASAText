@@ -63,9 +63,10 @@
  * - Shows menu + user profile
  * - Avatar = photo if present, otherwise first letter
  * - Reads data from localStorage
+ * - Reacts to "profile-updated" event
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { logout } from '../services/api.js'
 
@@ -77,10 +78,22 @@ const profilePhotoUrl = ref(localStorage.getItem('photoUrl') || '')
 
 // Initial letter fallback
 const profileInitial = computed(() =>
-  profileUsername.value
-    ? profileUsername.value.charAt(0).toUpperCase()
-    : '?'
+  profileUsername.value ? profileUsername.value.charAt(0).toUpperCase() : '?'
 )
+
+// Keep sidebar in sync after changes (photo/username)
+function syncProfileFromStorage() {
+  profileUsername.value = localStorage.getItem('username') || ''
+  profilePhotoUrl.value = localStorage.getItem('photoUrl') || ''
+}
+
+onMounted(() => {
+  window.addEventListener('profile-updated', syncProfileFromStorage)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('profile-updated', syncProfileFromStorage)
+})
 
 // Go to account page
 function goToAccount() {
@@ -93,8 +106,12 @@ function handleLogout() {
     logout()
   } catch (_) {}
 
+  localStorage.removeItem('token')
   localStorage.removeItem('username')
   localStorage.removeItem('photoUrl')
+
+  // aggiorna anche la sidebar subito
+  syncProfileFromStorage()
 
   router.push({ name: 'Login' })
 }
