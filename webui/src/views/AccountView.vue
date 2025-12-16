@@ -169,9 +169,27 @@ async function onUploadPhoto() {
 
   try {
     await setMyPhoto(selectedPhoto.value)
-    // prima: photoMessage.value = 'Request sent (server currently returns 501 Not Implemented).'
     photoMessage.value = 'Photo uploaded successfully.'
     photoError.value = false
+
+    // ✅ 1) rileggo il context per ottenere la nuova photoUrl
+    const res = await fetch('/v1/context', {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    })
+    if (res.ok) {
+      const ctx = await res.json()
+      if (ctx.photoUrl) {
+        localStorage.setItem('photoUrl', ctx.photoUrl)
+      } else {
+        localStorage.removeItem('photoUrl')
+      }
+    }
+
+    // ✅ 2) dico alla sidebar di aggiornarsi
+    window.dispatchEvent(new Event('profile-updated'))
+
   } catch (e) {
     console.error(e)
     photoMessage.value = e.message || 'Upload failed.'
@@ -180,6 +198,7 @@ async function onUploadPhoto() {
     uploadingPhoto.value = false
   }
 }
+
 
 </script>
 
