@@ -106,10 +106,14 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
 export function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('username')
-  localStorage.removeItem('userPhoto')
+  localStorage.removeItem('photoUrl') // ✅ NOME GIUSTO
   localStorage.removeItem('theme')
   localStorage.removeItem('lastChat')
+
+  // opzionale ma utile: aggiorna subito UI
+  window.dispatchEvent(new Event('profile-updated'))
 }
+
 
 /* ----------------------------------------------------------------------
  * LOGIN
