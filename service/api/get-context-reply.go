@@ -56,5 +56,11 @@ func (rt *_router) getContextReply(
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(reply)
+    
+    if err := json.NewEncoder(w).Encode(reply); err != nil {
+    	ctx.Logger.WithError(err).Error("cannot encode context reply")
+    	http.Error(w, "failed to encode response", http.StatusInternalServerError)
+    	return
+    }
+
 }
