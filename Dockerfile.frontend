@@ -1,36 +1,29 @@
-# =========================
-# Stage 1: build frontend
-# =========================
+# Stage 1: build frontend (Vue/Vite)
 FROM node:20-alpine AS build
 
-WORKDIR /app
+# Lavoriamo direttamente dentro webui
+WORKDIR /app/webui
 
-# Enable Corepack + Yarn 4.5.0
+# Yarn 4 via corepack
 RUN corepack enable && corepack prepare yarn@4.5.0 --activate
 
-# Copia PRIMA i file Yarn che definiscono il linker
-COPY webui/.yarnrc.yml ./
-COPY webui/.yarn/ ./.yarn/
-
-# Copia manifest e lock
+# Copio SOLO manifest per cache layer
 COPY webui/package.json webui/yarn.lock ./
 
-# Install dipendenze (stato coerente)
-RUN yarn install --immutable
+# Install dipendenze
+RUN yarn install
 
-# Copia il resto del frontend
+# Copio il resto del frontend
 COPY webui/ ./
 
 # Build produzione
 RUN yarn build
 
-# =========================
-# Stage 2: Nginx
-# =========================
+
+# Stage 2: Nginx per servire i file statici
 FROM nginx:alpine
 
-# Copia output Vite
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/webui/dist /usr/share/nginx/html
 
 EXPOSE 3000
 CMD ["nginx", "-g", "daemon off;"]
