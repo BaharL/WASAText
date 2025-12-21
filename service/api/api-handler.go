@@ -42,7 +42,6 @@ func (rt *_router) Handler() http.Handler {
 
 	// --- MEDIA ---
 	rt.router.POST("/media", rt.wrap(rt.uploadMedia))
-	
 
 	return rt.router
 }
