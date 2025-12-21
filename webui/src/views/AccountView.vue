@@ -73,8 +73,9 @@
               type="file"
               accept="image/*"
               class="form-control mb-3"
-              @change="onPhotoSelected"
               :disabled="uploadingPhoto"
+              @change="onPhotoSelected"
+              
             >
 
             <button
