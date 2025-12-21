@@ -1,32 +1,32 @@
-import { fileURLToPath, URL } from 'node:url'
+import { fileURLToPath, URL } from "node:url";
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
 
-// https://vitejs.dev/config/
-export default defineConfig(({ command, mode, ssrBuild }) => {
-  const ret = {
+export default defineConfig(() => {
+  return {
     plugins: [vue()],
     resolve: {
       alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
     },
+
+    // ✅ DEV ONLY: proxy /api -> backend
     server: {
       proxy: {
-        '/api': {
-          target: 'http://localhost:3000',
+        "/api": {
+          target: "http://localhost:3000",
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          // /api/foo -> /foo
+          rewrite: (path) => path.replace(/^\/api/, ""),
         },
       },
     },
-  }
 
-  ret.define = {
-    // Do not modify this constant, it is used in the evaluation.
-    '__API_URL__': JSON.stringify('/api'),
-  }
-
-  return ret
-})
+    define: {
+      // ✅ IMPORTANT: niente URL assoluto nel codice applicativo
+      "__API_URL__": JSON.stringify("/api"),
+    },
+  };
+});
