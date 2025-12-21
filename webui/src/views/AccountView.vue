@@ -75,7 +75,6 @@
               class="form-control mb-3"
               :disabled="uploadingPhoto"
               @change="onPhotoSelected"
-              
             >
 
             <button
