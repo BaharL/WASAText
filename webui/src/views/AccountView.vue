@@ -60,7 +60,7 @@
         </div>
       </div>
 
-      <!-- Stub per foto profilo -->
+      <!-- Profile photo -->
       <div class="col-md-6 mb-4">
         <div class="card">
           <div class="card-body">
@@ -87,7 +87,6 @@
               <span v-else>Upload photo</span>
             </button>
 
-
             <p
               v-if="photoMessage"
               class="mt-2 small"
@@ -107,14 +106,12 @@
  * AccountView.vue
  * - Change username
  * - Upload profile photo
- * - Sync photoUrl with sidebar
+ * - Convert relative photoUrl to absolute using __API_URL__
+ * - Sync sidebar via "profile-updated" event
  */
 
 import { computed, ref } from 'vue'
 import { setMyUserName, setMyPhoto, getContext } from '../services/api.js'
-
-// ⚠️ backend ORIGIN (uguale a quello dell’API)
-const BACKEND_ORIGIN = 'http://localhost:3000'
 
 const username = ref(localStorage.getItem('username') || '')
 const newUsername = ref(username.value)
@@ -145,7 +142,6 @@ async function onChangeUsername() {
     username.value = trimmed
     localStorage.setItem('username', trimmed)
 
-    // aggiorna sidebar
     window.dispatchEvent(new Event('profile-updated'))
     usernameSuccess.value = true
   } catch (e) {
@@ -170,26 +166,24 @@ async function onUploadPhoto() {
   photoError.value = false
 
   try {
-    // upload
+    // Upload photo
     await setMyPhoto(selectedPhoto.value)
 
-    // rileggo context
+    // Reload context
     const ctx = await getContext()
 
     if (ctx.photoUrl) {
-      // 🔥 FIX FONDAMENTALE: URL ASSOLUTO
+      // __API_URL__ is injected by Vite (see vite.config.js)
       const absoluteUrl = ctx.photoUrl.startsWith('http')
         ? ctx.photoUrl
-        : BACKEND_ORIGIN + ctx.photoUrl
+        : `${__API_URL__}${ctx.photoUrl}`
 
       localStorage.setItem('photoUrl', absoluteUrl)
     } else {
       localStorage.removeItem('photoUrl')
     }
 
-    // aggiorna sidebar
     window.dispatchEvent(new Event('profile-updated'))
-
     photoMessage.value = 'Photo uploaded successfully.'
   } catch (e) {
     console.error(e)
