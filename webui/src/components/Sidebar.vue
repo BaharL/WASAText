@@ -31,7 +31,7 @@
               :src="profilePhotoUrl"
               alt="avatar"
               class="avatar-img"
-            />
+            >
             <span v-else>{{ profileInitial }}</span>
           </div>
 
