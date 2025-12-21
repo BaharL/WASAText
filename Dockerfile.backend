@@ -1,18 +1,23 @@
+# Stage 1: build
 FROM golang:1.23 AS builder
 
-WORKDIR /app
-
+WORKDIR /src
 COPY . .
 
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webapi ./cmd/webapi
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webapi ./cmd/webapi
 
+
+# Stage 2: runtime
 FROM alpine:3
 
-WORKDIR /root/
+# cartella "neutra" (NON /root)
+WORKDIR /app
 
-COPY --from=builder /app/webapi .
+# copia binario
+COPY --from=builder /src/webapi ./webapi
 
-RUN chmod +x ./webapi
+# permessi: eseguibile + leggibile
+RUN chmod 755 ./webapi
 
 EXPOSE 8080
 
