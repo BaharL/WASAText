@@ -3,25 +3,27 @@ FROM node:20-alpine AS build
 
 WORKDIR /app/webui
 
-# Enable Corepack + Yarn 4.5.0
-RUN corepack enable && corepack prepare yarn@4.5.0 --activate
+# Enable Corepack (Yarn)
+RUN corepack enable
 
-# Copy dependency files first (better cache)
-COPY webui/package.json webui/yarn.lock ./
+# Copy ONLY the files needed for dependency install (cache-friendly)
+COPY webui/package.json webui/yarn.lock webui/.yarnrc.yml ./
 
-# Install deps (Yarn Berry)
+# If .yarnrc.yml contains yarnPath, we must copy the Yarn release too
+COPY webui/.yarn/releases ./\.yarn/releases
+
+# Install deps (must NOT change yarn.lock)
 RUN yarn install --immutable --immutable-cache
 
 # Copy the rest of the frontend
-COPY webui ./
+COPY webui/ ./
 
-# Build production (because there is NO "build" script)
+# Build production (your package.json has build-prod, not build)
 RUN yarn build-prod
+
 
 # Stage 2: Nginx serve static files
 FROM nginx:alpine
-
 COPY --from=build /app/webui/dist /usr/share/nginx/html
-
 EXPOSE 3000
 CMD ["nginx", "-g", "daemon off;"]
