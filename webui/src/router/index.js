@@ -1,14 +1,20 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
-import { isAuthenticated } from '../services/api.js'
 import AccountView from '../views/AccountView.vue'
+
+// We will NOT rely on "isAuthenticated()" alone anymore.
+// Instead, we validate the session by calling a backend endpoint (e.g. /context).
+import { getToken, getContext, logout } from '../services/api.js'
 
 const routes = [
   {
     path: '/account',
     name: 'Account',
-    component: AccountView
+    component: AccountView,
+    // IMPORTANT: Account must also be protected.
+    // Without this, anyone can access /account even when logged out.
+    meta: { requiresAuth: true }
   },
   {
     path: '/login',
@@ -51,27 +57,4 @@ const routes = [
   },
   {
     // Fallback: any unknown route → Home
-    path: '/:pathMatch(.*)*',
-    redirect: { name: 'Home' }
-  }
-]
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes
-})
-
-// Global navigation guard
-router.beforeEach((to, from, next) => {
-  if (to.meta.requiresAuth && !isAuthenticated()) {
-    // Not logged → go to login
-    next({ name: 'Login' })
-  } else if (to.name === 'Login' && isAuthenticated()) {
-    // Already logged → go to Home (all conversations)
-    next({ name: 'Home' })
-  } else {
-    next()
-  }
-})
-
-export default router
+    path: '/:pathMatch
