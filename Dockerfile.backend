@@ -19,6 +19,6 @@ COPY --from=builder /app/webapi ./webapi
 # Make sure it's executable for any user
 RUN chmod 755 ./webapi
 
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["./webapi"]
