@@ -4,7 +4,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="h2 mb-0">Conversations</h1>
 
-      <!-- Toggle New chat mode instead of creating an empty group immediately -->
+      <!-- Toggle "New chat mode" instead of creating an empty group immediately -->
       <button
         type="button"
         class="btn btn-sm btn-primary"
@@ -16,13 +16,13 @@
       </button>
     </div>
 
-    <!-- New chat panel (select users first) -->
+    <!-- New chat panel: search users + select members + create -->
     <div v-if="newChatMode" class="card mb-3">
       <div class="card-body">
         <div class="d-flex flex-column gap-2">
           <div class="fw-semibold">Create a new chat</div>
 
-          <!-- Optional group name (used only if more than 1 selected) -->
+          <!-- Optional group name (recommended only when you select 2+ users) -->
           <input
             v-model.trim="newChatName"
             type="text"
@@ -56,7 +56,7 @@
             {{ userSearchError }}
           </small>
 
-          <!-- Selected users summary -->
+          <!-- Selected users summary + create button -->
           <div class="d-flex align-items-center justify-content-between">
             <small class="text-muted">
               Selected: {{ selectedUsers.length }}
@@ -77,7 +77,7 @@
             {{ createChatError }}
           </small>
 
-          <!-- Search results with checkboxes -->
+          <!-- Search results list with checkboxes -->
           <ul
             v-if="userResults.length > 0"
             class="list-group mt-2 user-results"
@@ -106,8 +106,8 @@
           </ul>
 
           <small class="text-muted">
-            Tip: selecting 1 user creates a direct chat (2 people: you + them).
-            Selecting 2+ users creates a group.
+            Tip: selecting 1 user creates a direct chat (you + them).
+            Selecting 2+ users creates a group chat.
           </small>
         </div>
       </div>
@@ -156,12 +156,13 @@
             Members: {{ getMembersLabel(c) }}
           </small>
 
+          <!-- Optional preview of last message -->
           <small v-if="c.lastMessage" class="text-muted">
             {{ c.lastMessage.text || '[' + c.lastMessage.kind + ']' }}
             · {{ c.lastMessage.createdAt }}
           </small>
 
-          <!-- Optional: show a tiny label if it is a group -->
+          <!-- Optional label -->
           <small v-if="isGroupChat(c)" class="text-muted">
             Group chat
           </small>
@@ -172,6 +173,20 @@
 </template>
 
 <script setup>
+/**
+ * ConversationListView.vue
+ *
+ * Goals:
+ * - Show conversations list (all/direct/groups depending on route)
+ * - Provide a safe "New chat" flow:
+ *    1) Search users
+ *    2) Select members
+ *    3) Create chat
+ *
+ * Important professor requirement:
+ * - Do NOT create empty chats (no group with members: [])
+ */
+
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -184,6 +199,7 @@ import { getToken, listUsers } from '../services/api.js'
 const router = useRouter()
 const route = useRoute()
 
+// Conversations state
 const conversations = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -200,16 +216,14 @@ const searchingUsers = ref(false)
 const userSearchError = ref('')
 const userResults = ref([])
 
-// Selected users for creating a chat
-const selectedUsers = ref([]) // array of user objects {identifier, username/name}
+// Selected users to be added to the new chat
+const selectedUsers = ref([]) // user objects (identifier, username/name)
 
 /**
- * Compute the conversations to show, based on current route:
- * - /conversations/direct     -> only non-group chats
- * - /conversations/groups     -> only group chats
- * - otherwise                -> all
- *
- * It expects each conversation to have "isGroup" from backend.
+ * Filter conversations based on current route:
+ * - /conversations/direct  => non-group chats
+ * - /conversations/groups  => group chats
+ * - /                     => all
  */
 const filteredConversations = computed(() => {
   if (route.name === 'DirectConversations') {
@@ -222,70 +236,58 @@ const filteredConversations = computed(() => {
 })
 
 /**
- * Detect whether conversation is a group.
- * Backend may use different field names, so we keep it robust.
+ * Best-effort detection for group chats (backend field may differ).
  */
 function isGroupChat(c) {
   if (typeof c.isGroup === 'boolean') return c.isGroup
   if (typeof c.group === 'boolean') return c.group
   if (typeof c.is_group === 'boolean') return c.is_group
-  // Fallback: if it has a "members" array and it's > 2, treat as group
+
+  // Fallback: if members exist and are more than 2, assume group
   const members = c.members || c.participants || c.users
   if (Array.isArray(members) && members.length > 2) return true
+
   return false
 }
 
 /**
- * Unread count:
- * We display it only if backend provides something like unreadCount/unread.
- * Otherwise we show nothing (we can't compute unread reliably without server support).
+ * Unread count (only if backend provides it).
  */
 function getUnreadCount(c) {
-  return (
-    c.unreadCount ??
-    c.unread ??
-    c.unread_messages ??
-    0
-  )
+  return (c.unreadCount ?? c.unread ?? c.unread_messages ?? 0)
 }
 
 /**
- * Members label:
- * If backend provides members/participants with usernames, we show them.
- * If it provides only identifiers, we show count.
+ * Build a readable members label for group chats.
  */
 function getMembersLabel(c) {
   const members = c.members || c.participants || c.users
   if (!Array.isArray(members) || members.length === 0) return ''
 
-  // If members are objects with username/name
   const names = members
     .map(m => (typeof m === 'string' ? '' : (m.username || m.name || '')))
     .filter(Boolean)
 
   if (names.length > 0) {
-    // Show up to 3 names, then +N more
     const first = names.slice(0, 3)
     const rest = names.length - first.length
     return rest > 0 ? `${first.join(', ')} +${rest}` : first.join(', ')
   }
 
-  // Otherwise fallback to count
   return `${members.length}`
 }
 
 /**
- * Conversation title:
- * - If backend provides explicit title/name, use it.
- * - Otherwise, build a friendly fallback.
+ * Build a title:
+ * - Prefer explicit backend title/name/chatName
+ * - Otherwise try to derive from members
+ * - Final fallback: "Chat <id>"
  */
 function getTitle(c) {
-  // Prefer explicit titles
   if (c.title) return c.title
   if (c.name) return c.name
   if (c.chatName) return c.chatName
 
-  // If backend provides participants with usernames, build a title
   const members = c.members || c.participants || c.users
   if (Array.isArray(members) && members.length > 0) {
     const names = members
@@ -293,9 +295,7 @@ function getTitle(c) {
       .filter(Boolean)
 
     if (names.length > 0) {
-      // Direct chat: show the first other name if possible
-      if (!isGroupChat(c) && names.length >= 1) return names[0]
-      // Group: show first names as summary
+      if (!isGroupChat(c)) return names[0]
       const first = names.slice(0, 2)
       const rest = names.length - first.length
       return rest > 0 ? `${first.join(', ')} +${rest}` : first.join(', ')
@@ -306,7 +306,8 @@ function getTitle(c) {
 }
 
 /**
- * Load all my conversations from backend.
+ * Load conversations:
+ * Backend returns: { conversations: [...] }
  */
 async function loadConversations() {
   loading.value = true
@@ -318,11 +319,7 @@ async function loadConversations() {
     if (token) headers.Authorization = `Bearer ${token}`
 
     const response = await axios.get('/conversations', { headers })
-    const data = response.data
-
-    conversations.value = Array.isArray(data)
-      ? data
-      : (data.conversations || [])
+    conversations.value = response.data?.conversations || []
   } catch (e) {
     console.error(e)
     error.value = e.message || 'Failed to load conversations.'
@@ -332,17 +329,20 @@ async function loadConversations() {
 }
 
 /**
- * Toggle New chat panel.
- * We no longer create an empty group immediately (prof requirement).
+ * Toggle New chat mode and reset states when closing.
  */
 function toggleNewChat() {
   newChatMode.value = !newChatMode.value
   createChatError.value = ''
   userSearchError.value = ''
-  photoResetSearchIfClosing()
+
+  resetNewChatStateIfClosing()
 }
 
-function photoResetSearchIfClosing() {
+/**
+ * Reset UI-only new chat state when user closes the panel.
+ */
+function resetNewChatStateIfClosing() {
   if (!newChatMode.value) {
     userSearch.value = ''
     userResults.value = []
@@ -352,7 +352,8 @@ function photoResetSearchIfClosing() {
 }
 
 /**
- * Search users by name using GET /users?search=...
+ * Search users by keyword.
+ * listUsers(term) must call GET /users?search=term (or your backend equivalent).
  */
 async function handleUserSearch() {
   const term = userSearch.value.trim()
@@ -367,9 +368,7 @@ async function handleUserSearch() {
 
   try {
     const data = await listUsers(term)
-    userResults.value = Array.isArray(data)
-      ? data
-      : (data.users || [])
+    userResults.value = Array.isArray(data) ? data : (data.users || [])
   } catch (e) {
     console.error(e)
     userSearchError.value = e.message || 'Failed to search users.'
@@ -394,11 +393,15 @@ function toggleSelected(u) {
 }
 
 /**
- * Create conversation from selected users.
- * - 1 selected user => direct chat (you + them)
- * - 2+ selected users => group chat
+ * Create chat from selected users:
+ * - 1 selected => direct chat
+ * - 2+ selected => group chat
  *
- * IMPORTANT: We never send an empty members[] list.
+ * We do NOT allow empty members[] (prof requirement).
+ *
+ * NOTE:
+ * This code assumes backend endpoint POST /groups with body:
+ * { name: string, members: string[] }
  */
 async function createConversationFromSelection() {
   createChatError.value = ''
@@ -408,43 +411,83 @@ async function createConversationFromSelection() {
     return
   }
 
-  try {
-    creatingChat.value = true
-    error.value = ''
+  creatingChat.value = true
 
+  try {
     const token = getToken()
     const headers = {}
     if (token) headers.Authorization = `Bearer ${token}`
 
     const memberIds = selectedUsers.value.map(u => u.identifier)
 
-    // If only 1 user selected, treat as direct chat.
-    // If 2+ users selected, treat as group.
+    // Group if you selected >= 2 users (you + 2 => at least 3 participants)
     const isGroup = memberIds.length >= 2
 
-    // Build a reasonable name:
-    // - direct: other user name
-    // - group: input name or default
+    // Build a good default name
     const defaultName = isGroup
       ? (newChatName.value.trim() || 'New group')
       : (selectedUsers.value[0].username || selectedUsers.value[0].name || 'Direct chat')
 
     const response = await axios.post(
       '/groups',
-      {
-        name: defaultName,
-        members: memberIds
-      },
+      { name: defaultName, members: memberIds },
       { headers }
     )
 
-    const data = response.data
+    const created = response.data
 
+    // Refresh conversations list
     await loadConversations()
 
-    // Close panel after creation
+    // Close panel
     newChatMode.value = false
-    photoResetSearchIfClosing()
+    resetNewChatStateIfClosing()
 
-    if (data && data.chatId) {
-      router.push({ name: 'Conversation', params:
+    // Navigate to the created conversation if backend returns chatId
+    if (created?.chatId) {
+      router.push({ name: 'Conversation', params: { chatId: created.chatId } })
+    }
+  } catch (e) {
+    console.error(e)
+
+    // Friendly message for typical backend validations
+    const msg = (e.message || '').toLowerCase()
+    if (msg.includes('members') || msg.includes('minimum') || msg.includes('at least')) {
+      createChatError.value = 'Unable to create the chat. The backend may require more members.'
+    } else {
+      createChatError.value = e.message || 'Failed to create conversation.'
+    }
+  } finally {
+    creatingChat.value = false
+  }
+}
+
+/**
+ * Open a conversation by navigating to ConversationView.
+ */
+function openConversation(c) {
+  const chatId = c.chatId ?? c.id
+  if (!chatId) return
+
+  router.push({ name: 'Conversation', params: { chatId } })
+}
+
+onMounted(() => {
+  loadConversations()
+})
+</script>
+
+<style scoped>
+.list-group-item {
+  cursor: pointer;
+}
+
+/* Make search results not look like clickable conversations */
+.user-results .list-group-item {
+  cursor: default;
+}
+
+.conversation-list-root {
+  padding-top: 0;
+}
+</style>
