@@ -61,6 +61,7 @@
  * - Avatar = photo if present, otherwise first letter
  * - Reads data from localStorage
  * - Reacts to "profile-updated" event
+ * - IMPORTANT: On logout we must clear local session to avoid stale tokens
  */
 
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
@@ -69,7 +70,7 @@ import { logout } from '../services/api.js'
 
 const router = useRouter()
 
-// User data from localStorage
+// Reactive user data (initially from localStorage)
 const profileUsername = ref(localStorage.getItem('username') || '')
 const profilePhotoUrl = ref(localStorage.getItem('photoUrl') || '')
 
@@ -84,7 +85,21 @@ function syncProfileFromStorage() {
   profilePhotoUrl.value = localStorage.getItem('photoUrl') || ''
 }
 
+/**
+ * Clear local session keys used by the app.
+ * Keep these keys aligned with isAuthenticated() and login/logout logic.
+ */
+function clearLocalSession() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('photoUrl')
+}
+
 onMounted(() => {
+  // Sync immediately on mount
+  syncProfileFromStorage()
+
+  // Listen for updates fired by AccountView / Profile save
   window.addEventListener('profile-updated', syncProfileFromStorage)
 })
 
@@ -97,11 +112,16 @@ function goToAccount() {
   router.push({ name: 'Account' })
 }
 
-function handleLogout() {
-  try { logout() } catch (_) {}
-  router.push({ name: 'Login' })
-}
+async function handleLogout() {
+  // Call backend logout if available (ignore failures)
+  try { await logout() } catch (_) {}
 
+  // Always clear local storage to prevent stale sessions
+  clearLocalSession()
+
+  // Redirect to login (replace prevents going back)
+  router.replace({ name: 'Login' })
+}
 </script>
 
 <!-- styles are in dashboard.css -->
