@@ -1,25 +1,35 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
+
 import LoginView from '../views/LoginView.vue'
 import AccountView from '../views/AccountView.vue'
+import { isAuthenticated } from '../services/api.js'
 
-// We validate authentication by calling a real backend endpoint (/context),
-// not just by checking if a token exists in localStorage.
-import { getToken, getContext, logout } from '../services/api.js'
-
+/**
+ * Routes overview:
+ * - /login is public
+ * - /, /conversations/* are protected (requireAuth)
+ * - /account should also be protected (otherwise it can crash if token is stale)
+ *
+ * IMPORTANT:
+ * - We keep a fallback route to avoid blank pages on unknown URLs.
+ * - We preserve the "next" query parameter so after login the user can go back
+ *   to the originally requested page.
+ */
 const routes = [
-  {
-    path: '/account',
-    name: 'Account',
-    component: AccountView,
-    // IMPORTANT: Account page must be protected as well
-    meta: { requiresAuth: true }
-  },
   {
     path: '/login',
     name: 'Login',
     component: LoginView
   },
+
+  {
+    path: '/account',
+    name: 'Account',
+    component: AccountView,
+    meta: { requiresAuth: true } // ✅ protect account too
+  },
+
   {
     // HOME: all conversations (direct + groups together)
     path: '/',
@@ -27,11 +37,13 @@ const routes = [
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
+
   {
     // Redirect /conversations -> Home (so both URLs work)
     path: '/conversations',
     redirect: { name: 'Home' }
   },
+
   {
     // Only direct / personal chats
     path: '/conversations/direct',
@@ -39,6 +51,7 @@ const routes = [
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
+
   {
     // Only group chats
     path: '/conversations/groups',
@@ -46,6 +59,7 @@ const routes = [
     component: () => import('../views/ConversationListView.vue'),
     meta: { requiresAuth: true }
   },
+
   {
     // Single conversation page
     path: '/conversations/:chatId',
@@ -54,9 +68,9 @@ const routes = [
     props: true,
     meta: { requiresAuth: true }
   },
+
   {
-    // Fallback: any unknown route → Home
-    // Home is protected, so unauthenticated users will be redirected to Login
+    // Fallback: any unknown route -> Home (or Login if not authenticated)
     path: '/:pathMatch(.*)*',
     redirect: { name: 'Home' }
   }
@@ -68,51 +82,31 @@ const router = createRouter({
 })
 
 /**
- * Returns true only if:
- * 1) a token exists AND
- * 2) the backend confirms the session is valid (GET /context).
- *
- * If the token is stale or invalid (e.g. user not found in DB),
- * logout() is executed and the session is considered invalid.
- */
-async function hasValidSession() {
-  const token = getToken()
-  if (!token) return false
-
-  try {
-    await getContext()
-    return true
-  } catch (err) {
-    logout()
-    return false
-  }
-}
-
-/**
  * Global navigation guard:
- * - Protected routes require a valid session.
- * - Login route redirects to Home if the user is already authenticated.
- *
- * This prevents reopening the last page when the token is stale.
+ * - If user is NOT authenticated and tries to access a protected route,
+ *   redirect to /login and store original route in `next`.
+ * - If user IS authenticated and tries to go to /login, redirect to Home.
  */
-router.beforeEach(async (to) => {
-  const needsAuth = !!to.meta.requiresAuth
+router.beforeEach((to, from, next) => {
+  const requiresAuth = !!to.meta.requiresAuth
+  const authed = isAuthenticated()
 
-  if (needsAuth) {
-    const ok = await hasValidSession()
-    if (!ok) {
-      return { name: 'Login' }
-    }
+  if (requiresAuth && !authed) {
+    // Preserve the original destination to return after successful login.
+    next({
+      name: 'Login',
+      query: { next: to.fullPath }
+    })
+    return
   }
 
-  if (to.name === 'Login') {
-    const ok = await hasValidSession()
-    if (ok) {
-      return { name: 'Home' }
-    }
+  if (to.name === 'Login' && authed) {
+    // Already logged in -> go to Home
+    next({ name: 'Home' })
+    return
   }
 
-  return true
+  next()
 })
 
 export default router
