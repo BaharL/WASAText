@@ -176,15 +176,20 @@
 /**
  * ConversationListView.vue
  *
- * Goals:
- * - Show conversations list (all/direct/groups depending on route)
+ * Responsibilities:
+ * - Load and show conversations (all/direct/groups depending on route)
  * - Provide a safe "New chat" flow:
- *    1) Search users
- *    2) Select members
- *    3) Create chat
+ *   1) Search users
+ *   2) Select members
+ *   3) Create chat (direct or group)
  *
- * Important professor requirement:
- * - Do NOT create empty chats (no group with members: [])
+ * Notes:
+ * - The backend currently returns only:
+ *   { id, title, isGroup, lastMessage }
+ *   => No members list, no unread count.
+ * - Therefore:
+ *   - "Members:" label will remain empty unless backend provides membersPreview
+ *   - Unread badge will stay 0 unless backend provides unreadCount
  */
 
 import { ref, onMounted, computed } from 'vue'
@@ -235,74 +240,36 @@ const filteredConversations = computed(() => {
   return conversations.value
 })
 
-/**
- * Best-effort detection for group chats (backend field may differ).
- */
 function isGroupChat(c) {
-  if (typeof c.isGroup === 'boolean') return c.isGroup
-  if (typeof c.group === 'boolean') return c.group
-  if (typeof c.is_group === 'boolean') return c.is_group
-
-  // Fallback: if members exist and are more than 2, assume group
-  const members = c.members || c.participants || c.users
-  if (Array.isArray(members) && members.length > 2) return true
-
-  return false
+  return !!c.isGroup
 }
 
-/**
- * Unread count (only if backend provides it).
- */
 function getUnreadCount(c) {
-  return (c.unreadCount ?? c.unread ?? c.unread_messages ?? 0)
+  // Backend does NOT provide unreadCount yet => always 0
+  return (c.unreadCount ?? 0)
 }
 
-/**
- * Build a readable members label for group chats.
- */
 function getMembersLabel(c) {
+  // Backend does NOT provide members yet => always empty
+  // This is here only for future improvements.
   const members = c.members || c.participants || c.users
   if (!Array.isArray(members) || members.length === 0) return ''
-
-  const names = members
-    .map(m => (typeof m === 'string' ? '' : (m.username || m.name || '')))
-    .filter(Boolean)
-
-  if (names.length > 0) {
-    const first = names.slice(0, 3)
-    const rest = names.length - first.length
-    return rest > 0 ? `${first.join(', ')} +${rest}` : first.join(', ')
-  }
-
   return `${members.length}`
 }
 
-/**
- * Build a title:
- * - Prefer explicit backend title/name/chatName
- * - Otherwise try to derive from members
- * - Final fallback: "Chat <id>"
- */
 function getTitle(c) {
-  if (c.title) return c.title
-  if (c.name) return c.name
-  if (c.chatName) return c.chatName
+  // Backend already returns "title"
+  // For direct chats, this may still be "Chat <id>" until backend provides the other user's name.
+  return c.title || c.name || `Chat ${c.id ?? c.chatId}`
+}
 
-  const members = c.members || c.participants || c.users
-  if (Array.isArray(members) && members.length > 0) {
-    const names = members
-      .map(m => (typeof m === 'string' ? '' : (m.username || m.name || '')))
-      .filter(Boolean)
-
-    if (names.length > 0) {
-      if (!isGroupChat(c)) return names[0]
-      const first = names.slice(0, 2)
-      const rest = names.length - first.length
-      return rest > 0 ? `${first.join(', ')} +${rest}` : first.join(', ')
-    }
-  }
-
-  return `Chat ${c.id ?? c.chatId}`
+/**
+ * Clear local session (used when we detect 401 / stale token).
+ */
+function clearLocalSession() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('photoUrl')
 }
 
 /**
@@ -321,6 +288,14 @@ async function loadConversations() {
     const response = await axios.get('/conversations', { headers })
     conversations.value = response.data?.conversations || []
   } catch (e) {
+    // If backend returns 401 => session expired => force login
+    const status = e?.response?.status
+    if (status === 401) {
+      clearLocalSession()
+      router.replace({ name: 'Login' })
+      return
+    }
+
     console.error(e)
     error.value = e.message || 'Failed to load conversations.'
   } finally {
@@ -328,21 +303,11 @@ async function loadConversations() {
   }
 }
 
-/**
- * Toggle New chat mode and reset states when closing.
- */
 function toggleNewChat() {
   newChatMode.value = !newChatMode.value
   createChatError.value = ''
   userSearchError.value = ''
 
-  resetNewChatStateIfClosing()
-}
-
-/**
- * Reset UI-only new chat state when user closes the panel.
- */
-function resetNewChatStateIfClosing() {
   if (!newChatMode.value) {
     userSearch.value = ''
     userResults.value = []
@@ -351,10 +316,6 @@ function resetNewChatStateIfClosing() {
   }
 }
 
-/**
- * Search users by keyword.
- * listUsers(term) must call GET /users?search=term (or your backend equivalent).
- */
 async function handleUserSearch() {
   const term = userSearch.value.trim()
   if (!term) {
@@ -377,9 +338,6 @@ async function handleUserSearch() {
   }
 }
 
-/**
- * Selection helpers
- */
 function isSelected(u) {
   return selectedUsers.value.some(x => x.identifier === u.identifier)
 }
@@ -393,15 +351,17 @@ function toggleSelected(u) {
 }
 
 /**
- * Create chat from selected users:
- * - 1 selected => direct chat
- * - 2+ selected => group chat
+ * Create a conversation from selected users.
  *
- * We do NOT allow empty members[] (prof requirement).
+ * IMPORTANT:
+ * - If you selected 1 user => this should create a DIRECT chat.
+ * - If you selected 2+ users => this should create a GROUP chat.
  *
- * NOTE:
- * This code assumes backend endpoint POST /groups with body:
- * { name: string, members: string[] }
+ * The exact endpoint depends on your backend:
+ * - group creation might be POST /groups
+ * - direct creation might be POST /conversations or POST /direct
+ *
+ * TODO: adjust endpoints to match your backend.
  */
 async function createConversationFromSelection() {
   createChatError.value = ''
@@ -420,55 +380,60 @@ async function createConversationFromSelection() {
 
     const memberIds = selectedUsers.value.map(u => u.identifier)
 
-    // Group if you selected >= 2 users (you + 2 => at least 3 participants)
-    const isGroup = memberIds.length >= 2
+    // Decide direct vs group
+    const shouldCreateGroup = memberIds.length >= 2
 
-    // Build a good default name
-    const defaultName = isGroup
-      ? (newChatName.value.trim() || 'New group')
-      : (selectedUsers.value[0].username || selectedUsers.value[0].name || 'Direct chat')
+    let created = null
 
-    const response = await axios.post(
-      '/groups',
-      { name: defaultName, members: memberIds },
-      { headers }
-    )
+    if (shouldCreateGroup) {
+      // GROUP: you + at least 2 other users
+      const name = newChatName.value.trim() || 'New group'
 
-    const created = response.data
+      created = (await axios.post(
+        '/groups',
+        { name, members: memberIds },
+        { headers }
+      )).data
+    } else {
+      // DIRECT: you + 1 other user
+      // TODO: replace '/direct' with the real endpoint in your backend.
+      created = (await axios.post(
+        '/direct',
+        { member: memberIds[0] },
+        { headers }
+      )).data
+    }
 
-    // Refresh conversations list
     await loadConversations()
 
-    // Close panel
     newChatMode.value = false
-    resetNewChatStateIfClosing()
+    userSearch.value = ''
+    userResults.value = []
+    selectedUsers.value = []
+    newChatName.value = ''
 
-    // Navigate to the created conversation if backend returns chatId
     if (created?.chatId) {
       router.push({ name: 'Conversation', params: { chatId: created.chatId } })
     }
   } catch (e) {
     console.error(e)
+    const status = e?.response?.status
 
-    // Friendly message for typical backend validations
-    const msg = (e.message || '').toLowerCase()
-    if (msg.includes('members') || msg.includes('minimum') || msg.includes('at least')) {
-      createChatError.value = 'Unable to create the chat. The backend may require more members.'
-    } else {
-      createChatError.value = e.message || 'Failed to create conversation.'
+    if (status === 401) {
+      clearLocalSession()
+      router.replace({ name: 'Login' })
+      return
     }
+
+    createChatError.value = e?.response?.data?.message || e.message || 'Failed to create conversation.'
   } finally {
     creatingChat.value = false
   }
 }
 
-/**
- * Open a conversation by navigating to ConversationView.
- */
 function openConversation(c) {
   const chatId = c.chatId ?? c.id
   if (!chatId) return
-
   router.push({ name: 'Conversation', params: { chatId } })
 }
 
