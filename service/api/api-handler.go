@@ -33,6 +33,9 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.DELETE("/messages/:messageId/reactions/:emoji", rt.wrap(rt.uncommentMessage))
 	rt.router.DELETE("/messages/:messageId", rt.wrap(rt.deleteMessage))
 
+	// --- DIRECT ---
+	rt.router.POST("/direct", rt.wrap(rt.createDirect))
+
 	// --- GROUPS ---
 	rt.router.POST("/groups", rt.wrap(rt.createGroup))
 	rt.router.POST("/groups/:chatId/members", rt.wrap(rt.addToGroup))
