@@ -51,7 +51,7 @@ function buildAuthHeaders(extraHeaders = {}) {
   }
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`
+    headers.Authorization = `Bearer ${token}`
   }
 
   return headers
@@ -106,33 +106,24 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
 export function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('username')
-  localStorage.removeItem('photoUrl') // ✅ NOME GIUSTO
+  localStorage.removeItem('photoUrl')
   localStorage.removeItem('theme')
   localStorage.removeItem('lastChat')
 
-  // opzionale ma utile: aggiorna subito UI
+  // optional but useful: refresh UI immediately
   window.dispatchEvent(new Event('profile-updated'))
 }
-
 
 /* ----------------------------------------------------------------------
  * LOGIN
  * ------------------------------------------------------------------- */
 
-/**
- * Login or create user.
- * POST /session
- *
- * @param {string} name - Username to login with.
- * @returns {Promise<{identifier: string}>}
- */
 export async function login(name) {
   const data = await request('/session', {
     method: 'POST',
     data: { name }
   })
 
-  // The backend returns { identifier: "<uuid>" }
   setToken(data.identifier)
   return data
 }
@@ -141,13 +132,6 @@ export async function login(name) {
  * USER + PROFILE PHOTO
  * ------------------------------------------------------------------- */
 
-/**
- * Change my username.
- * PUT /users/username
- *
- * @param {string} username - New username.
- * @returns {Promise<any>} - Updated user object.
- */
 export async function setMyUserName(username) {
   return request('/users/username', {
     method: 'PUT',
@@ -155,13 +139,6 @@ export async function setMyUserName(username) {
   })
 }
 
-/**
- * Search users by username.
- * GET /users?search=...
- *
- * @param {string} search - Search term.
- * @returns {Promise<{users: Array}>}
- */
 export async function listUsers(search) {
   return request('/users', {
     method: 'GET',
@@ -169,53 +146,31 @@ export async function listUsers(search) {
   })
 }
 
-/**
- * Upload or change my profile photo.
- * PUT /users/photo
- *
- * @param {File} file - Image file selected from an <input type="file">.
- * @returns {Promise<any>}
- */
 export async function setMyPhoto(file) {
   const formData = new FormData()
   formData.append('file', file)
 
   return request('/users/photo', {
     method: 'PUT',
-    // Let the browser set Content-Type (multipart/form-data with boundary)
     headers: {},
     data: formData
   })
 }
-// GET /context
+
 export async function getContext() {
   return request('/context', { method: 'GET' })
 }
-
 
 /* ----------------------------------------------------------------------
  * CONVERSATIONS
  * ------------------------------------------------------------------- */
 
-/**
- * Get my conversations.
- * GET /conversations
- *
- * @returns {Promise<{conversations: Array}>}
- */
 export async function getMyConversations() {
   return request('/conversations', {
     method: 'GET'
   })
 }
 
-/**
- * Get messages of a conversation.
- * GET /conversations/{chatId}
- *
- * @param {number} chatId
- * @returns {Promise<{messages: Array}>}
- */
 export async function getConversation(chatId) {
   return request(`/conversations/${chatId}`, {
     method: 'GET'
@@ -223,24 +178,33 @@ export async function getConversation(chatId) {
 }
 
 /* ----------------------------------------------------------------------
- * MESSAGES
+ * DIRECT CHATS
  * ------------------------------------------------------------------- */
 
 /**
- * Send a message.
- * POST /messages
+ * Create (or get) a direct chat with exactly one other user.
+ * POST /direct
  *
- * Body must match SendMessageRequest schema:
- * {
- *   chatId: number,
- *   kind: "text" | "gif" | "image",
- *   text?: string,
- *   mediaUrl?: string
- * }
+ * Backend expects:
+ *   { "members": ["<otherIdentifier>"] }
  *
- * @param {object} payload
- * @returns {Promise<any>} - Created Message.
+ * Returns:
+ *   { "chatId": number }
+ *
+ * @param {string} otherIdentifier
+ * @returns {Promise<{chatId: number}>}
  */
+export async function createDirect(otherIdentifier) {
+  return request('/direct', {
+    method: 'POST',
+    data: { members: [otherIdentifier] }
+  })
+}
+
+/* ----------------------------------------------------------------------
+ * MESSAGES
+ * ------------------------------------------------------------------- */
+
 export async function sendMessage(payload) {
   return request('/messages', {
     method: 'POST',
@@ -248,14 +212,6 @@ export async function sendMessage(payload) {
   })
 }
 
-/**
- * Forward a message to another conversation.
- * POST /messages/{messageId}/forward
- *
- * @param {number} messageId
- * @param {number} toChatId
- * @returns {Promise<any>} - Created forwarded Message.
- */
 export async function forwardMessage(messageId, toChatId) {
   return request(`/messages/${messageId}/forward`, {
     method: 'POST',
@@ -263,14 +219,6 @@ export async function forwardMessage(messageId, toChatId) {
   })
 }
 
-/**
- * Add a reaction (emoji) to a message.
- * POST /messages/{messageId}/reactions
- *
- * @param {number} messageId
- * @param {string} emoji
- * @returns {Promise<any>} - Created Reaction.
- */
 export async function addReaction(messageId, emoji) {
   return request(`/messages/${messageId}/reactions`, {
     method: 'POST',
@@ -278,27 +226,12 @@ export async function addReaction(messageId, emoji) {
   })
 }
 
-/**
- * Remove a reaction from a message.
- * DELETE /messages/{messageId}/reactions/{emoji}
- *
- * @param {number} messageId
- * @param {string} emoji
- * @returns {Promise<void>}
- */
 export async function removeReaction(messageId, emoji) {
   return request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
     method: 'DELETE'
   })
 }
 
-/**
- * Delete a sent message.
- * DELETE /messages/{messageId}
- *
- * @param {number} messageId
- * @returns {Promise<void>}
- */
 export async function deleteMessage(messageId) {
   return request(`/messages/${messageId}`, {
     method: 'DELETE'
@@ -309,14 +242,6 @@ export async function deleteMessage(messageId) {
  * GROUPS
  * ------------------------------------------------------------------- */
 
-/**
- * Create a new group.
- * POST /groups
- *
- * @param {string} name - Group name.
- * @param {string[]} [members=[]] - Array of user identifiers (UUIDs).
- * @returns {Promise<{chatId: number}>}
- */
 export async function createGroup(name, members = []) {
   return request('/groups', {
     method: 'POST',
@@ -324,14 +249,6 @@ export async function createGroup(name, members = []) {
   })
 }
 
-/**
- * Add members to an existing group.
- * POST /groups/{chatId}/members
- *
- * @param {number} chatId
- * @param {string[]} members - Array of user identifiers (UUIDs).
- * @returns {Promise<void>}
- */
 export async function addToGroup(chatId, members) {
   return request(`/groups/${chatId}/members`, {
     method: 'POST',
@@ -339,27 +256,12 @@ export async function addToGroup(chatId, members) {
   })
 }
 
-/**
- * Leave a group (current user).
- * DELETE /groups/{chatId}/members/me
- *
- * @param {number} chatId
- * @returns {Promise<void>}
- */
 export async function leaveGroup(chatId) {
   return request(`/groups/${chatId}/members/me`, {
     method: 'DELETE'
   })
 }
 
-/**
- * Change group name.
- * PUT /groups/{chatId}/name
- *
- * @param {number} chatId
- * @param {string} name - New group name.
- * @returns {Promise<{message: string}>}
- */
 export async function setGroupName(chatId, name) {
   return request(`/groups/${chatId}/name`, {
     method: 'PUT',
@@ -367,14 +269,6 @@ export async function setGroupName(chatId, name) {
   })
 }
 
-/**
- * Set group photo URL.
- * PUT /groups/{chatId}/photo
- *
- * @param {number} chatId
- * @param {string} photoUrl - Public URL of the group photo.
- * @returns {Promise<{message: string}>}
- */
 export async function setGroupPhoto(chatId, photoUrl) {
   return request(`/groups/${chatId}/photo`, {
     method: 'PUT',
