@@ -13,10 +13,10 @@ import (
 // listMyConversations handles GET /conversations.
 //
 // Rules:
-// - If Authorization is missing/invalid => 401
-// - If the token is valid but references a user that does not exist anymore
-//   (stale session / DB reset / deleted user) => 401 (NOT 500)
-// - Only real internal errors => 500
+//   - If Authorization is missing/invalid => 401
+//   - If the token is valid but references a user that does not exist anymore
+//     (stale session / DB reset / deleted user) => 401 (NOT 500)
+//   - Only real internal errors => 500
 func (rt *_router) listMyConversations(
 	w http.ResponseWriter,
 	r *http.Request,
