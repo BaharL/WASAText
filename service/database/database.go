@@ -66,6 +66,9 @@ type AppDatabase interface {
 	ListUserConversations(ctx context.Context, userIdentifier string) ([]ConversationSummary, error)
 	ListConversationMessages(ctx context.Context, userIdentifier string, conversationID int64) ([]Message, error)
 
+	// Direct chats
+	GetOrCreateDirectChat(ctx context.Context, requesterIdentifier string, otherIdentifier string) (int64, error)
+
 	// Group operations
 	CreateGroup(ctx context.Context, ownerIdentifier string, name string, memberIdentifiers []string) (int64, error)
 	AddMembersToGroup(ctx context.Context, requesterIdentifier string, chatID int64, memberIdentifiers []string) error
