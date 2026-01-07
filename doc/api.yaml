@@ -422,6 +422,45 @@ paths:
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
   
+
+  /direct:
+    post:
+      tags: [conversations]
+      summary: Create or get a direct conversation
+      description: |
+        Creates a direct (1-to-1) conversation with the given user.
+        If it already exists, it returns the existing chatId.
+      operationId: createDirect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [members]
+              properties:
+                members:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        "201":
+          description: Direct chat created or returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chatId:
+                    type: integer
+                required: [chatId]
+        "400": { $ref: "#/components/responses/BadRequestError" }
+        "401": { $ref: "#/components/responses/UnauthorizedError" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+  
   /groups:
     post:
       tags: [groups]
