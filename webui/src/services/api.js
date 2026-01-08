@@ -160,15 +160,22 @@ export async function setMyPhoto(file) {
 export async function getContext() {
   const ctx = await request('/context', { method: 'GET' })
 
-  // keep local session in sync (sidebar reads from localStorage)
-  if (ctx?.username !== undefined) localStorage.setItem('username', ctx.username || '')
-  if (ctx?.photoUrl !== undefined) localStorage.setItem('photoUrl', ctx.photoUrl || '')
+  // sync username
+  if (ctx?.username !== undefined) {
+    localStorage.setItem('username', ctx.username || '')
+  }
 
-  // update UI immediately (Sidebar listens to this)
+  // sync photoUrl (ensure it is the new correct prefix)
+  if (ctx?.photoUrl !== undefined) {
+    let p = ctx.photoUrl || ''
+    if (p && p.startsWith('/uploads/')) p = `/v1${p}` // legacy fix
+    localStorage.setItem('photoUrl', p)
+  }
+
   window.dispatchEvent(new Event('profile-updated'))
-
   return ctx
 }
+
 
 
 /* ----------------------------------------------------------------------
