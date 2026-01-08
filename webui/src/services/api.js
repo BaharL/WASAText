@@ -158,8 +158,18 @@ export async function setMyPhoto(file) {
 }
 
 export async function getContext() {
-  return request('/context', { method: 'GET' })
+  const ctx = await request('/context', { method: 'GET' })
+
+  // keep local session in sync (sidebar reads from localStorage)
+  if (ctx?.username !== undefined) localStorage.setItem('username', ctx.username || '')
+  if (ctx?.photoUrl !== undefined) localStorage.setItem('photoUrl', ctx.photoUrl || '')
+
+  // update UI immediately (Sidebar listens to this)
+  window.dispatchEvent(new Event('profile-updated'))
+
+  return ctx
 }
+
 
 /* ----------------------------------------------------------------------
  * CONVERSATIONS
