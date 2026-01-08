@@ -34,13 +34,10 @@ function buildAuthHeaders(extraHeaders = {}) {
  * DIRECT CHAT TITLES (localStorage)
  * ------------------------------------------------------------------- */
 
-function directChatTitlesKey() {
-  const t = getToken()
-  return t ? `directChatNames:${t}` : 'directChatNames:anon'
-}
+const DIRECT_TITLES_KEY = 'directChatNames'
 
 function loadDirectTitleMap() {
-  const raw = localStorage.getItem(directChatTitlesKey())
+  const raw = localStorage.getItem(DIRECT_TITLES_KEY)
   if (!raw) return {}
   try { return JSON.parse(raw) } catch { return {} }
 }
@@ -53,9 +50,8 @@ export function getDirectChatTitle(chatId) {
 export function saveDirectChatTitle(chatId, displayName) {
   const map = loadDirectTitleMap()
   map[String(chatId)] = displayName
-  localStorage.setItem(directChatTitlesKey(), JSON.stringify(map))
+  localStorage.setItem(DIRECT_TITLES_KEY, JSON.stringify(map))
 }
-
 
 /* ----------------------------------------------------------------------
  * INTERNAL REQUEST WRAPPER
