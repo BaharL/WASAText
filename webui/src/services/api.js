@@ -252,3 +252,19 @@ export async function setGroupPhoto(chatId, photoUrl) {
     data: { photoUrl }
   })
 }
+
+/* ----------------------------------------------------------------------
+ * MEDIA
+ * ------------------------------------------------------------------- */
+
+export async function uploadMedia(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request('/media', {
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/form-data' },
+    data: formData
+  })
+}
+
