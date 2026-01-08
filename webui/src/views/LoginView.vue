@@ -38,7 +38,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { login } from '../services/api.js';
+import { login, getContext } from '../services/api.js';
 
 const router = useRouter();
 const name = ref('');
@@ -50,19 +50,25 @@ async function onSubmit() {
   loading.value = true;
 
   try {
+    // 1) Login -> salva token (identifier) in localStorage (dentro login())
     await login(name.value);
 
-    // ⭐ NEW: salviamo anche lo username nel localStorage
-    localStorage.setItem('username', name.value);
+    // 2) Carica contesto dal backend e sincronizza localStorage:
+    //    - username reale
+    //    - photoUrl (es. /v1/uploads/profiles/<id>.jpg)
+    //    (getContext() deve salvare anche in localStorage e triggerare "profile-updated")
+    await getContext();
 
+    // 3) Vai alla home
     await router.push({ name: 'Home' });
   } catch (err) {
     console.error(err);
-    error.value = err.message || 'Errore di login.';
+    error.value = err?.message || 'Errore di login.';
   } finally {
     loading.value = false;
   }
 }
+
 </script>
 
 <style scoped>
