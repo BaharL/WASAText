@@ -143,20 +143,20 @@ function notifyProfileUpdated() {
 function toImgSrc(url) {
   if (!url) return ''
 
-  // Already absolute
   if (url.startsWith('http://') || url.startsWith('https://')) return url
 
-  // Ensure it starts with "/"
-  const u = url.startsWith('/') ? url : `/${url}`
+  // backend returns "/uploads/..." (without /v1) sometimes
+  if (url.startsWith('/uploads/')) return `/api/v1${url}`
 
-  // If already proxied
-  if (u.startsWith('/api/')) return u
+  // backend returns "/v1/..."
+  if (url.startsWith('/v1/')) return `/api${url}`
 
-  // Media returned by backend as "/v1/..."
-  if (u.startsWith('/v1/')) return u // <-- con proxy /v1 deve funzionare
+  // already proxied
+  if (url.startsWith('/api/')) return url
 
-  return u
+  return url.startsWith('/') ? url : `/${url}`
 }
+
 
 function normalizeUsernameError(err) {
   const raw = (err?.message || '').toLowerCase()
