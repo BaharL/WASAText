@@ -58,48 +58,38 @@
 /**
  * Sidebar.vue
  * - Shows menu + user profile
- * - Avatar = photo if present, otherwise first letter
- * - Reads data from localStorage
+ * - Reads username/photoUrl from localStorage
  * - Reacts to "profile-updated" event
- * - IMPORTANT: On logout we must clear local session to avoid stale tokens
+ * - Logout is client-side (clears localStorage) handled by services/api.js
  */
 
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { logout } from '../services/api.js'
+import { logout as clientLogout } from '../services/api.js'
 
 const router = useRouter()
 
-// Reactive user data (initially from localStorage)
 const profileUsername = ref(localStorage.getItem('username') || '')
 const profilePhotoUrl = ref(localStorage.getItem('photoUrl') || '')
 
-// Initial letter fallback
 const profileInitial = computed(() =>
   profileUsername.value ? profileUsername.value.charAt(0).toUpperCase() : '?'
 )
 
-// Keep sidebar in sync after changes (photo/username)
-function syncProfileFromStorage() {
-  profileUsername.value = localStorage.getItem('username') || ''
-  profilePhotoUrl.value = localStorage.getItem('photoUrl') || ''
+function normalizePhotoUrl(url) {
+  if (!url) return ''
+  // legacy values saved in storage before backend fix
+  if (url.startsWith('/uploads/')) return `/v1${url}`
+  return url
 }
 
-/**
- * Clear local session keys used by the app.
- * Keep these keys aligned with isAuthenticated() and login/logout logic.
- */
-function clearLocalSession() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('photoUrl')
+function syncProfileFromStorage() {
+  profileUsername.value = localStorage.getItem('username') || ''
+  profilePhotoUrl.value = normalizePhotoUrl(localStorage.getItem('photoUrl') || '')
 }
 
 onMounted(() => {
-  // Sync immediately on mount
   syncProfileFromStorage()
-
-  // Listen for updates fired by AccountView / Profile save
   window.addEventListener('profile-updated', syncProfileFromStorage)
 })
 
@@ -107,19 +97,13 @@ onBeforeUnmount(() => {
   window.removeEventListener('profile-updated', syncProfileFromStorage)
 })
 
-// Go to account page
 function goToAccount() {
   router.push({ name: 'Account' })
 }
 
-async function handleLogout() {
-  // Call backend logout if available (ignore failures)
-  try { await logout() } catch (_) {}
-
-  // Always clear local storage to prevent stale sessions
-  clearLocalSession()
-
-  // Redirect to login (replace prevents going back)
+function handleLogout() {
+  // client-side logout (clears token/username/photoUrl + emits profile-updated)
+  clientLogout()
   router.replace({ name: 'Login' })
 }
 </script>
