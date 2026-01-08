@@ -195,7 +195,6 @@
                   alt="avatar"
                   class="conv-avatar-img"
                 >
-
                 <span v-else class="conv-avatar-fallback">
                   {{ getConversationAvatarLabel(c) }}
                 </span>
@@ -223,16 +222,6 @@
 </template>
 
 <script setup>
-/**
- * ConversationListView.vue
- *
- * Improvements implemented:
- * - Group avatar: photo if available, otherwise initial of group title
- * - If multiple chats share the same title, show A2, A3, ...
- * - Direct chat title: use a local mapping chatId -> other user's name
- *   (works immediately for newly created directs)
- */
-
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -288,32 +277,22 @@ const filteredConversations = computed(() => {
 })
 
 /* ---------------------------
- * Local mapping for direct titles
- * --------------------------- */
-function loadDirectTitleMap() {
-  const raw = localStorage.getItem('directChatNames')
-  if (!raw) return {}
-  try { return JSON.parse(raw) } catch { return {} }
-}
-
-function saveDirectTitle(chatId, displayName) {
-  const map = loadDirectTitleMap()
-  map[String(chatId)] = displayName
-  localStorage.setItem('directChatNames', JSON.stringify(map))
-}
-
-function getSavedDirectTitle(chatId) {
-  const map = loadDirectTitleMap()
-  return map[String(chatId)] || ''
-}
-
-/* ---------------------------
- * Title + avatar helpers
+ * Helpers
  * --------------------------- */
 function toImgSrc(url) {
   if (!url) return ''
+
+  // absolute
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+
+  // if backend returns "/uploads/..", in dev/prod we must go through /api
+  if (url.startsWith('/uploads/')) return `/api/v1${url}`
+
+  // if already returned with "/v1/..", proxy needs /api prefix
   if (url.startsWith('/v1/')) return `/api${url}`
-  return url
+
+  // fallback
+  return url.startsWith('/') ? url : `/${url}`
 }
 
 function getConversationTitle(c) {
@@ -365,7 +344,6 @@ function getConversationAvatarLabel(c) {
   return `${first}${n}`
 }
 
-
 /* ---------------------------
  * Load conversations
  * --------------------------- */
@@ -391,7 +369,6 @@ function toggleNewChat() {
   newChatMode.value = !newChatMode.value
   createError.value = ''
   userSearchError.value = ''
-
   if (!newChatMode.value) resetNewChatState()
 }
 
@@ -417,9 +394,8 @@ let debounceTimer = null
 function debouncedSearch() {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
-    if (userSearch.value.trim().length >= 2) {
-      handleUserSearch()
-    } else {
+    if (userSearch.value.trim().length >= 2) handleUserSearch()
+    else {
       userResults.value = []
       userSearchError.value = ''
     }
@@ -465,13 +441,12 @@ async function handleUserClick(u) {
     return
   }
 
-  // DIRECT: create immediately
+  // DIRECT
   createError.value = ''
   creating.value = true
   try {
     const created = await createDirect(u.identifier)
 
-    // Save direct title locally (so we don't show "Chat 1")
     if (created?.chatId) {
       const display = u.username || u.name || 'Direct'
       saveDirectChatTitle(created.chatId, display)
@@ -539,65 +514,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.conversation-list-root {
-  padding-top: 0;
-}
+.conversation-list-root { padding-top: 0; }
+.newchat-panel { border-radius: 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+.selected-chips { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
+.chip { border:1px solid rgba(0,0,0,0.15); background:#fff; padding:0.25rem 0.55rem; border-radius:999px; font-size:0.85rem; display:inline-flex; align-items:center; gap:0.35rem; }
+.chip-x { font-weight:700; opacity:0.6; }
+.user-results .list-group-item { text-align:left; }
 
-.newchat-panel {
-  border-radius: 14px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-}
-
-.selected-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-
-.chip {
-  border: 1px solid rgba(0,0,0,0.15);
-  background: #fff;
-  padding: 0.25rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.chip-x {
-  font-weight: 700;
-  opacity: 0.6;
-}
-
-.user-results .list-group-item {
-  text-align: left;
-}
-
-/* Conversation avatar */
 .conv-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  overflow: hidden;
-  flex: 0 0 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e9ecef;
-  border: 1px solid rgba(0,0,0,0.06);
+  width: 36px; height: 36px; border-radius: 999px; overflow: hidden;
+  flex: 0 0 36px; display:flex; align-items:center; justify-content:center;
+  background:#e9ecef; border:1px solid rgba(0,0,0,0.06);
 }
-
-.conv-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.conv-avatar-fallback {
-  font-weight: 800;
-  font-size: 0.85rem;
-  color: #495057;
-}
+.conv-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.conv-avatar-fallback { font-weight:800; font-size:0.85rem; color:#495057; }
 </style>
