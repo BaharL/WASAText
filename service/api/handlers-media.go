@@ -14,8 +14,8 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// uploadMedia gestisce POST /media (AUTENTICATO)
-// Carica un file media (immagine/GIF) e ritorna un URL pubblico
+// uploadMedia gestisce POST /v1/media (AUTENTICATO)
+// Carica un file media (immagine/GIF/WebP) e ritorna un URL pubblico
 func (rt *_router) uploadMedia(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
 	// 1) Auth: serve utente loggato
 	if ctx.UserIdentifier == "" {
@@ -51,14 +51,12 @@ func (rt *_router) uploadMedia(w http.ResponseWriter, r *http.Request, _ httprou
 	reader := io.MultiReader(bytes.NewReader(buf[:n]), file)
 
 	// 5) Estensione coerente col tipo rilevato
-	ext := filepath.Ext(header.Filename)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext == "" {
 		ext = getExtensionFromContentType(detectedType)
-	} else {
-		ext = strings.ToLower(ext)
 	}
 
-	// 6) Nome file unico (uso UserIdentifier così è coerente col progetto)
+	// 6) Nome file unico
 	filename := fmt.Sprintf("media_%s_%d%s", ctx.UserIdentifier, time.Now().UnixNano(), ext)
 
 	// 7) Percorso dove salvare il file
@@ -85,12 +83,10 @@ func (rt *_router) uploadMedia(w http.ResponseWriter, r *http.Request, _ httprou
 		return
 	}
 
-	// 8) Ritorna URL pubblico *assoluto* (coerente con OpenAPI format: url)
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	publicURL := fmt.Sprintf("%s://%s/uploads/media/%s", scheme, r.Host, filename)
+	// 8) ✅ URL PUBBLICO: usa path relativo con /v1
+	// Così in DEV: browser fa /api + vite proxy => ok
+	// In PROD: nginx /api => ok
+	publicURL := fmt.Sprintf("/v1/uploads/media/%s", filename)
 
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"url": publicURL,
