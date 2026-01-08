@@ -307,14 +307,21 @@ function getSavedDirectTitle(chatId) {
 /* ---------------------------
  * Title + avatar helpers
  * --------------------------- */
-function getConversationTitle(c) {
-  const base = c.title || `Chat ${c.id}`
+function toImgSrc(url) {
+  if (!url) return ''
+  if (url.startsWith('/v1/')) return `/api${url}`
+  return url
+}
 
-  // If backend gives generic title for directs, use local mapping if available
+function getConversationTitle(c) {
+  const base = c.title || c.name || c.chatName || `Chat ${c.id}`
+
   if (c.isGroup === false) {
     const saved = getSavedDirectTitle(c.id)
     if (saved) return saved
   }
+  return base
+}
 
   return base
 }
@@ -357,6 +364,7 @@ function getConversationAvatarLabel(c) {
   const n = titleIndexById.value.get(c.id) || 1
   return `${first}${n}`
 }
+
 
 /* ---------------------------
  * Load conversations
