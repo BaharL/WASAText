@@ -63,7 +63,7 @@ func (rt *_router) setMyUserName(
 		return
 	}
 
-	// Manteniamo 204 (No Content) come nella versione originale / nei test
+	// 204 No Content
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -77,7 +77,6 @@ func (rt *_router) listUsers(
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// Siccome in OpenAPI c'è il bearer, proteggo anche qui
 	if ctx.UserIdentifier == "" {
 		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
@@ -85,7 +84,7 @@ func (rt *_router) listUsers(
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	if search == "" {
-		// Stesso comportamento logico di prima: se non c'è search → lista vuota
+		// lista vuota coerente
 		writeJSON(w, http.StatusOK, []userSummary{})
 		return
 	}
@@ -118,13 +117,13 @@ func (rt *_router) setMyPhoto(
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// Verifica che l'utente sia autenticato
+	// Auth
 	if ctx.UserIdentifier == "" {
 		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	// Limite dimensione (es. 10 MB)
+	// Max 10MB
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorMsg("invalid multipart form"))
 		return
@@ -137,41 +136,39 @@ func (rt *_router) setMyPhoto(
 	}
 	defer file.Close()
 
-	// Tipo MIME dal header
+	// Detect MIME (meglio così che fidarsi del header)
 	contentType := header.Header.Get("Content-Type")
 	if contentType == "" {
-		// Prova a rilevarlo leggendo qualche byte
 		buf := make([]byte, 512)
 		n, _ := file.Read(buf)
 		contentType = http.DetectContentType(buf[:n])
-		// Riavvolgi lo stream
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorMsg("cannot reset file reader"))
 			return
 		}
 	}
 
-	// Riutilizziamo i controlli di /media
 	if !isValidMediaType(contentType) {
 		writeJSON(w, http.StatusBadRequest, errorMsg("unsupported media type"))
 		return
 	}
 
+	// Estensione coerente col type
 	ext := getExtensionFromContentType(contentType)
 	if ext == "" {
-		ext = filepath.Ext(header.Filename)
+		ext = strings.ToLower(filepath.Ext(header.Filename))
 	}
 	if ext == "" {
-		ext = ".bin"
+		ext = ".jpg"
 	}
 
-	// Crea cartella uploads/profiles se non esiste
+	// Crea cartella uploads/profiles
 	if err := os.MkdirAll("./uploads/profiles", 0o755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorMsg("cannot create profiles directory"))
 		return
 	}
 
-	// Salviamo la foto con nome basato sull'identifier dell'utente
+	// Sovrascrive la foto dell'utente (ok)
 	filename := fmt.Sprintf("%s%s", ctx.UserIdentifier, ext)
 	dstPath := filepath.Join("./uploads/profiles", filename)
 
@@ -187,9 +184,9 @@ func (rt *_router) setMyPhoto(
 		return
 	}
 
-	photoURL := "/uploads/profiles/" + filename
+	// ✅ FIX: ServeFiles è sotto /v1/uploads/...
+	photoURL := "/v1/uploads/profiles/" + filename
 
-	// Risposta: 200 + URL della foto
 	writeJSON(w, http.StatusOK, map[string]string{
 		"photoUrl": photoURL,
 	})
