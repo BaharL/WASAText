@@ -4,12 +4,9 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
       <div>
         <h1 class="h2 mb-0">Conversations</h1>
-        <small class="text-muted">
-          {{ routeLabel }}
-        </small>
+        <small class="text-muted">{{ routeLabel }}</small>
       </div>
 
-      <!-- Actions -->
       <div class="d-flex gap-2">
         <button
           type="button"
@@ -33,14 +30,11 @@
       </div>
     </div>
 
-    <!-- New chat overlay/panel -->
+    <!-- New chat panel -->
     <div v-if="newChatMode" class="newchat-panel card mb-3">
       <div class="card-body">
-        <!-- Top row: mode switch -->
         <div class="d-flex align-items-center justify-content-between mb-2">
-          <div class="fw-semibold">
-            Start a new chat
-          </div>
+          <div class="fw-semibold">Start a new chat</div>
 
           <div class="btn-group btn-group-sm" role="group" aria-label="New chat mode">
             <button
@@ -73,7 +67,6 @@
           </span>
         </small>
 
-        <!-- Group name (only for groups) -->
         <div v-if="newChatKind === 'group'" class="mb-2">
           <input
             v-model.trim="groupName"
@@ -82,12 +75,9 @@
             placeholder="Group name"
             :disabled="creating"
           >
-          <small class="text-muted">
-            Tip: choose a clear name (e.g. “Project WASA”).
-          </small>
+          <small class="text-muted">Tip: choose a clear name (e.g. “Project WASA”).</small>
         </div>
 
-        <!-- Search bar -->
         <div class="input-group mb-2">
           <span class="input-group-text">🔎</span>
           <input
@@ -114,7 +104,6 @@
           {{ userSearchError }}
         </small>
 
-        <!-- Selected chips (group only) -->
         <div v-if="newChatKind === 'group' && selectedUsers.length > 0" class="selected-chips mb-2">
           <span class="me-2 text-muted small">Selected:</span>
           <button
@@ -131,7 +120,6 @@
           </button>
         </div>
 
-        <!-- Results list -->
         <div v-if="userResults.length > 0" class="list-group user-results">
           <button
             v-for="u in userResults"
@@ -146,15 +134,11 @@
               <small class="text-muted">{{ u.identifier }}</small>
             </div>
 
-            <!-- Right side -->
             <div class="d-flex align-items-center gap-2">
-              <!-- Group selection toggle -->
               <template v-if="newChatKind === 'group'">
                 <span v-if="isSelected(u)" class="badge text-bg-success">Selected</span>
                 <span v-else class="badge text-bg-light">Tap to add</span>
               </template>
-
-              <!-- Direct hint -->
               <template v-else>
                 <span class="badge text-bg-light">Tap to chat</span>
               </template>
@@ -162,17 +146,13 @@
           </button>
         </div>
 
-        <!-- Empty results -->
         <div v-else class="text-muted small mt-2">
           <span v-if="userSearch.trim() && !searching">No users found.</span>
           <span v-else>Type to search users.</span>
         </div>
 
-        <!-- Action row (group only) -->
         <div v-if="newChatKind === 'group'" class="d-flex justify-content-between align-items-center mt-3">
-          <small class="text-muted">
-            Members selected: {{ selectedUsers.length }}
-          </small>
+          <small class="text-muted">Members selected: {{ selectedUsers.length }}</small>
 
           <button
             type="button"
@@ -191,10 +171,8 @@
       </div>
     </div>
 
-    <!-- Error -->
     <ErrorMsg v-if="error" :msg="error" />
 
-    <!-- Conversations list -->
     <LoadingSpinner :loading="loading">
       <div v-if="!loading && !error && filteredConversations.length === 0" class="text-muted">
         You do not have any conversations yet.
@@ -204,22 +182,39 @@
         <li
           v-for="c in filteredConversations"
           :key="c.id"
-          class="list-group-item list-group-item-action d-flex flex-column"
+          class="list-group-item list-group-item-action"
           @click="openConversation(c)"
         >
           <div class="d-flex align-items-center justify-content-between">
-            <div class="fw-semibold">
-              {{ c.title || `Chat ${c.id}` }}
+            <!-- Left: avatar + title -->
+            <div class="d-flex align-items-center gap-2">
+              <div class="conv-avatar">
+                <img
+                  v-if="getConversationPhoto(c)"
+                  :src="getConversationPhoto(c)"
+                  alt="avatar"
+                  class="conv-avatar-img"
+                >
+                <span v-else class="conv-avatar-fallback">
+                  {{ getConversationAvatarLabel(c) }}
+                </span>
+              </div>
+
+              <div class="d-flex flex-column">
+                <div class="fw-semibold">
+                  {{ getConversationTitle(c) }}
+                </div>
+
+                <small v-if="c.lastMessage" class="text-muted">
+                  {{ c.lastMessage.text || '[' + c.lastMessage.kind + ']' }}
+                  · {{ c.lastMessage.createdAt }}
+                </small>
+              </div>
             </div>
+
+            <!-- Right: type icon -->
             <small class="text-muted">{{ c.isGroup ? '👥' : '👤' }}</small>
           </div>
-
-          <small v-if="c.lastMessage" class="text-muted">
-            {{ c.lastMessage.text || '[' + c.lastMessage.kind + ']' }}
-            · {{ c.lastMessage.createdAt }}
-          </small>
-
-          <small v-if="c.isGroup" class="text-muted">Group chat</small>
         </li>
       </ul>
     </LoadingSpinner>
@@ -228,17 +223,13 @@
 
 <script setup>
 /**
- * ConversationListView.vue (WhatsApp-like UX)
+ * ConversationListView.vue
  *
- * - Direct mode:
- *   Search users -> CLICK a user -> createDirect(otherId) -> open chat
- *
- * - Group mode:
- *   Search users -> CLICK to select -> choose name -> createGroup(name, members) -> open chat
- *
- * IMPORTANT:
- * - We call ONLY services/api.js functions.
- * - axios interceptor handles 401 globally, so we don't duplicate logout/redirect here.
+ * Improvements implemented:
+ * - Group avatar: photo if available, otherwise initial of group title
+ * - If multiple chats share the same title, show A2, A3, ...
+ * - Direct chat title: use a local mapping chatId -> other user's name
+ *   (works immediately for newly created directs)
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -257,39 +248,32 @@ import {
 const router = useRouter()
 const route = useRoute()
 
-// Conversations state
 const conversations = ref([])
 const loading = ref(false)
 const error = ref('')
 
-// New chat state
 const newChatMode = ref(false)
-const newChatKind = ref('direct') // 'direct' | 'group'
+const newChatKind = ref('direct')
 const groupName = ref('')
 const creating = ref(false)
 const createError = ref('')
 
-// User search state
 const userSearch = ref('')
 const searching = ref(false)
 const userSearchError = ref('')
 const userResults = ref([])
 
-// Group selection
 const selectedUsers = ref([])
 
-/**
- * Route label helper (nice UI hint)
- */
+/* ---------------------------
+ * Route label + filtering
+ * --------------------------- */
 const routeLabel = computed(() => {
   if (route.name === 'DirectConversations') return 'Showing direct chats only'
   if (route.name === 'GroupConversations') return 'Showing group chats only'
   return 'Showing all chats'
 })
 
-/**
- * Filter conversations based on route:
- */
 const filteredConversations = computed(() => {
   if (route.name === 'DirectConversations') {
     return conversations.value.filter(c => c.isGroup === false)
@@ -300,9 +284,87 @@ const filteredConversations = computed(() => {
   return conversations.value
 })
 
+/* ---------------------------
+ * Local mapping for direct titles
+ * --------------------------- */
+function loadDirectTitleMap() {
+  const raw = localStorage.getItem('directChatNames')
+  if (!raw) return {}
+  try { return JSON.parse(raw) } catch { return {} }
+}
+
+function saveDirectTitle(chatId, displayName) {
+  const map = loadDirectTitleMap()
+  map[String(chatId)] = displayName
+  localStorage.setItem('directChatNames', JSON.stringify(map))
+}
+
+function getSavedDirectTitle(chatId) {
+  const map = loadDirectTitleMap()
+  return map[String(chatId)] || ''
+}
+
+/* ---------------------------
+ * Title + avatar helpers
+ * --------------------------- */
+function getConversationTitle(c) {
+  const base = c.title || `Chat ${c.id}`
+
+  // If backend gives generic title for directs, use local mapping if available
+  if (c.isGroup === false) {
+    const saved = getSavedDirectTitle(c.id)
+    if (saved) return saved
+  }
+
+  return base
+}
+
+function getConversationPhoto(c) {
+  return c.photoUrl || c.photo_url || c.photo || ''
+}
+
+/**
+ * Build "A", "A2", ... when multiple conversations share the same title.
+ */
+const titleCounts = computed(() => {
+  const map = new Map()
+  for (const c of filteredConversations.value) {
+    const t = getConversationTitle(c).trim()
+    map.set(t, (map.get(t) || 0) + 1)
+  }
+  return map
+})
+
+const titleIndexById = computed(() => {
+  const seen = new Map()
+  const idx = new Map()
+  for (const c of filteredConversations.value) {
+    const t = getConversationTitle(c).trim()
+    const n = (seen.get(t) || 0) + 1
+    seen.set(t, n)
+    idx.set(c.id, n)
+  }
+  return idx
+})
+
+function getConversationAvatarLabel(c) {
+  const title = getConversationTitle(c).trim()
+  const first = title ? title.charAt(0).toUpperCase() : '?'
+
+  const count = titleCounts.value.get(title) || 0
+  if (count <= 1) return first
+
+  const n = titleIndexById.value.get(c.id) || 1
+  return `${first}${n}`
+}
+
+/* ---------------------------
+ * Load conversations
+ * --------------------------- */
 async function loadConversations() {
   loading.value = true
   error.value = ''
+
   try {
     const data = await getMyConversations()
     conversations.value = data?.conversations || []
@@ -314,22 +376,21 @@ async function loadConversations() {
   }
 }
 
+/* ---------------------------
+ * New chat panel logic
+ * --------------------------- */
 function toggleNewChat() {
   newChatMode.value = !newChatMode.value
   createError.value = ''
   userSearchError.value = ''
 
-  if (!newChatMode.value) {
-    resetNewChatState()
-  }
+  if (!newChatMode.value) resetNewChatState()
 }
 
 function setNewChatKind(kind) {
   newChatKind.value = kind
   createError.value = ''
   userSearchError.value = ''
-
-  // When switching mode, keep search term/results but reset selections/name
   selectedUsers.value = []
   groupName.value = ''
 }
@@ -344,15 +405,10 @@ function resetNewChatState() {
   createError.value = ''
 }
 
-/**
- * Simple debounce (no external libs).
- * We call search automatically after 350ms of inactivity.
- */
 let debounceTimer = null
 function debouncedSearch() {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
-    // only auto-search if user typed at least 2 chars
     if (userSearch.value.trim().length >= 2) {
       handleUserSearch()
     } else {
@@ -392,32 +448,29 @@ function removeSelected(u) {
   selectedUsers.value = selectedUsers.value.filter(x => x.identifier !== u.identifier)
 }
 
-/**
- * Handle click on a user result:
- * - direct mode: create direct chat immediately
- * - group mode: toggle selection
- */
 async function handleUserClick(u) {
   if (creating.value) return
 
   if (newChatKind.value === 'group') {
-    // Toggle selection
-    if (isSelected(u)) {
-      removeSelected(u)
-    } else {
-      selectedUsers.value.push(u)
-    }
+    if (isSelected(u)) removeSelected(u)
+    else selectedUsers.value.push(u)
     return
   }
 
-  // Direct: create chat immediately
+  // DIRECT: create immediately
   createError.value = ''
   creating.value = true
   try {
     const created = await createDirect(u.identifier)
+
+    // Save direct title locally (so we don't show "Chat 1")
+    if (created?.chatId) {
+      const display = u.username || u.name || 'Direct'
+      saveDirectTitle(created.chatId, display)
+    }
+
     await loadConversations()
 
-    // Close panel and open chat
     newChatMode.value = false
     resetNewChatState()
 
@@ -450,9 +503,9 @@ async function createGroupFromSelection() {
   try {
     const memberIds = selectedUsers.value.map(u => u.identifier)
     const created = await createGroup(name, memberIds)
+
     await loadConversations()
 
-    // Close panel and open chat
     newChatMode.value = false
     resetNewChatState()
 
@@ -478,18 +531,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Small layout polish */
 .conversation-list-root {
   padding-top: 0;
 }
 
-/* Make the panel feel like an overlay card */
 .newchat-panel {
   border-radius: 14px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* Chips (selected users) */
 .selected-chips {
   display: flex;
   flex-wrap: wrap;
@@ -515,5 +565,31 @@ onMounted(() => {
 
 .user-results .list-group-item {
   text-align: left;
+}
+
+/* Conversation avatar */
+.conv-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9ecef;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.conv-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.conv-avatar-fallback {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #495057;
 }
 </style>
