@@ -31,11 +31,10 @@ function buildAuthHeaders(extraHeaders = {}) {
 }
 
 /* ----------------------------------------------------------------------
- * DIRECT CHAT TITLES (per-user, no more "Chat 3" after logout)
+ * DIRECT CHAT TITLES (localStorage)
  * ------------------------------------------------------------------- */
 
 function directChatTitlesKey() {
-  // key per utente (token/identifier). Se non c'è token => key anonima.
   const t = getToken()
   return t ? `directChatNames:${t}` : 'directChatNames:anon'
 }
@@ -43,11 +42,7 @@ function directChatTitlesKey() {
 function loadDirectTitleMap() {
   const raw = localStorage.getItem(directChatTitlesKey())
   if (!raw) return {}
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
+  try { return JSON.parse(raw) } catch { return {} }
 }
 
 export function getDirectChatTitle(chatId) {
@@ -60,6 +55,7 @@ export function saveDirectChatTitle(chatId, displayName) {
   map[String(chatId)] = displayName
   localStorage.setItem(directChatTitlesKey(), JSON.stringify(map))
 }
+
 
 /* ----------------------------------------------------------------------
  * INTERNAL REQUEST WRAPPER
