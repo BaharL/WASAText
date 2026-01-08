@@ -1,73 +1,40 @@
 // services/api.js
 // High-level API client for WASAText, built on top of axios instance from axios.js.
-// It manages:
-// - auth token (identifier returned by /session)
-// - Authorization header
-// - error normalization
-// - a typed function for each backend endpoint.
 
 import axios from './axios.js'
 
-/**
- * Get the stored auth token (user identifier).
- */
+/* ----------------------------------------------------------------------
+ * TOKEN + AUTH
+ * ------------------------------------------------------------------- */
+
 export function getToken() {
   return localStorage.getItem('token')
 }
 
-/**
- * Store auth token (user identifier) in localStorage.
- * @param {string} token
- */
 export function setToken(token) {
   localStorage.setItem('token', token)
 }
 
-/**
- * Remove auth token from localStorage.
- */
 export function clearToken() {
   localStorage.removeItem('token')
 }
 
-/**
- * Check whether the user is authenticated (token present).
- * @returns {boolean}
- */
 export function isAuthenticated() {
   return !!getToken()
 }
 
-/**
- * Build headers including Authorization if a token is present.
- * @param {object} extraHeaders
- * @returns {object}
- */
 function buildAuthHeaders(extraHeaders = {}) {
   const token = getToken()
+  const headers = { ...(extraHeaders || {}) }
 
-  const headers = {
-    ...(extraHeaders || {})
-  }
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
+  if (token) headers.Authorization = `Bearer ${token}`
   return headers
 }
 
-/**
- * Generic HTTP request wrapper around axios.
- *
- * @param {string} path - Relative API path (e.g. "/session", "/users").
- * @param {object} options
- * @param {string} [options.method="GET"]
- * @param {object} [options.data] - Request body for POST/PUT.
- * @param {object} [options.headers] - Extra headers.
- * @param {object} [options.params] - Query parameters.
- * @returns {Promise<any>} - Parsed response data.
- */
+/* ----------------------------------------------------------------------
+ * INTERNAL REQUEST WRAPPER
+ * ------------------------------------------------------------------- */
+
 async function request(path, { method = 'GET', data, headers, params } = {}) {
   try {
     const response = await axios.request({
@@ -77,22 +44,16 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
       data,
       params
     })
-
     return response.data
   } catch (error) {
     let message = 'Request failed'
 
-    if (error.response && error.response.data) {
-      const data = error.response.data
-
-      if (typeof data === 'string') {
-        message = data
-      } else if (data.error) {
-        message = data.error
-      } else if (data.message) {
-        message = data.message
-      }
-    } else if (error.message) {
+    const dataResp = error?.response?.data
+    if (dataResp) {
+      if (typeof dataResp === 'string') message = dataResp
+      else if (dataResp.error) message = dataResp.error
+      else if (dataResp.message) message = dataResp.message
+    } else if (error?.message) {
       message = error.message
     }
 
@@ -100,9 +61,10 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
   }
 }
 
-/**
- * Clear token and effectively log out on the client side.
- */
+/* ----------------------------------------------------------------------
+ * LOGOUT (client-side only)
+ * ------------------------------------------------------------------- */
+
 export function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('username')
@@ -110,7 +72,6 @@ export function logout() {
   localStorage.removeItem('theme')
   localStorage.removeItem('lastChat')
 
-  // optional but useful: refresh UI immediately
   window.dispatchEvent(new Event('profile-updated'))
 }
 
@@ -152,7 +113,8 @@ export async function setMyPhoto(file) {
 
   return request('/users/photo', {
     method: 'PUT',
-    headers: {},
+    // Important: some servers require explicit multipart content-type
+    headers: { 'Content-Type': 'multipart/form-data' },
     data: formData
   })
 }
@@ -165,10 +127,11 @@ export async function getContext() {
     localStorage.setItem('username', ctx.username || '')
   }
 
-  // sync photoUrl (ensure it is the new correct prefix)
+  // sync photoUrl (ensure correct prefix)
   if (ctx?.photoUrl !== undefined) {
     let p = ctx.photoUrl || ''
-    if (p && p.startsWith('/uploads/')) p = `/v1${p}` // legacy fix
+    // legacy fix: old backend returned "/uploads/..." (missing /v1)
+    if (p && p.startsWith('/uploads/')) p = `/v1${p}`
     localStorage.setItem('photoUrl', p)
   }
 
@@ -176,41 +139,22 @@ export async function getContext() {
   return ctx
 }
 
-
-
 /* ----------------------------------------------------------------------
  * CONVERSATIONS
  * ------------------------------------------------------------------- */
 
 export async function getMyConversations() {
-  return request('/conversations', {
-    method: 'GET'
-  })
+  return request('/conversations', { method: 'GET' })
 }
 
 export async function getConversation(chatId) {
-  return request(`/conversations/${chatId}`, {
-    method: 'GET'
-  })
+  return request(`/conversations/${chatId}`, { method: 'GET' })
 }
 
 /* ----------------------------------------------------------------------
  * DIRECT CHATS
  * ------------------------------------------------------------------- */
 
-/**
- * Create (or get) a direct chat with exactly one other user.
- * POST /direct
- *
- * Backend expects:
- *   { "members": ["<otherIdentifier>"] }
- *
- * Returns:
- *   { "chatId": number }
- *
- * @param {string} otherIdentifier
- * @returns {Promise<{chatId: number}>}
- */
 export async function createDirect(otherIdentifier) {
   return request('/direct', {
     method: 'POST',
@@ -223,10 +167,7 @@ export async function createDirect(otherIdentifier) {
  * ------------------------------------------------------------------- */
 
 export async function sendMessage(payload) {
-  return request('/messages', {
-    method: 'POST',
-    data: payload
-  })
+  return request('/messages', { method: 'POST', data: payload })
 }
 
 export async function forwardMessage(messageId, toChatId) {
@@ -250,9 +191,7 @@ export async function removeReaction(messageId, emoji) {
 }
 
 export async function deleteMessage(messageId) {
-  return request(`/messages/${messageId}`, {
-    method: 'DELETE'
-  })
+  return request(`/messages/${messageId}`, { method: 'DELETE' })
 }
 
 /* ----------------------------------------------------------------------
@@ -274,9 +213,7 @@ export async function addToGroup(chatId, members) {
 }
 
 export async function leaveGroup(chatId) {
-  return request(`/groups/${chatId}/members/me`, {
-    method: 'DELETE'
-  })
+  return request(`/groups/${chatId}/members/me`, { method: 'DELETE' })
 }
 
 export async function setGroupName(chatId, name) {
