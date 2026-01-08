@@ -10,7 +10,7 @@ import axios from "axios";
  *   in ONE place instead of duplicating logic in every view.
  */
 const instance = axios.create({
-  baseURL: __API_URL__,
+  baseURL: `${__API_URL__}/v1`,
   timeout: 1000 * 5,
 });
 
