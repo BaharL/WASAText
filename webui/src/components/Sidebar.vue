@@ -1,7 +1,5 @@
 <template>
-  <!-- Custom sidebar -->
   <nav class="app-sidebar d-flex flex-column">
-    <!-- Menu -->
     <div class="menu-section">
       <h6 class="text-muted text-uppercase mb-3">Menu</h6>
       <ul class="nav flex-column">
@@ -17,7 +15,6 @@
       </ul>
     </div>
 
-    <!-- Profile box (bottom) -->
     <div class="profile-box">
       <button
         type="button"
@@ -55,33 +52,26 @@
 </template>
 
 <script setup>
-/**
- * Sidebar.vue
- * - Shows menu + user profile
- * - Reads username/photoUrl from localStorage
- * - Reacts to "profile-updated" event
- * - Logout is client-side (clears localStorage) handled by services/api.js
- */
-
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { logout as clientLogout } from '../services/api.js'
 
 const router = useRouter()
 
+function normalizePhotoUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (url.startsWith('/api/')) return url
+  if (url.startsWith('/uploads/')) return `/v1${url}` // legacy fix
+  return url
+}
+
 const profileUsername = ref(localStorage.getItem('username') || '')
-const profilePhotoUrl = ref(localStorage.getItem('photoUrl') || '')
+const profilePhotoUrl = ref(normalizePhotoUrl(localStorage.getItem('photoUrl') || ''))
 
 const profileInitial = computed(() =>
   profileUsername.value ? profileUsername.value.charAt(0).toUpperCase() : '?'
 )
-
-function normalizePhotoUrl(url) {
-  if (!url) return ''
-  // legacy values saved in storage before backend fix
-  if (url.startsWith('/uploads/')) return `/v1${url}`
-  return url
-}
 
 function syncProfileFromStorage() {
   profileUsername.value = localStorage.getItem('username') || ''
@@ -102,7 +92,6 @@ function goToAccount() {
 }
 
 function handleLogout() {
-  // client-side logout (clears token/username/photoUrl + emits profile-updated)
   clientLogout()
   router.replace({ name: 'Login' })
 }
