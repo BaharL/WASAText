@@ -140,11 +140,22 @@ function notifyProfileUpdated() {
   window.dispatchEvent(new Event('profile-updated'))
 }
 
-// ✅ QUI È IL FIX: se in storage hai "/v1/..." allora va mostrato come "/api/v1/..."
 function toImgSrc(url) {
   if (!url) return ''
-  if (url.startsWith('/v1/')) return `/api${url}`
-  return url
+
+  // Already absolute
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+
+  // Ensure it starts with "/"
+  const u = url.startsWith('/') ? url : `/${url}`
+
+  // If already proxied
+  if (u.startsWith('/api/')) return u
+
+  // Media returned by backend as "/v1/..."
+  if (u.startsWith('/v1/')) return u // <-- con proxy /v1 deve funzionare
+
+  return u
 }
 
 function normalizeUsernameError(err) {
