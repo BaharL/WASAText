@@ -191,10 +191,11 @@
               <div class="conv-avatar">
                 <img
                   v-if="getConversationPhoto(c)"
-                  :src="getConversationPhoto(c)"
+                  :src="toImgSrc(getConversationPhoto(c))"
                   alt="avatar"
                   class="conv-avatar-img"
                 >
+
                 <span v-else class="conv-avatar-fallback">
                   {{ getConversationAvatarLabel(c) }}
                 </span>
