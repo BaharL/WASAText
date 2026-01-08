@@ -43,7 +43,7 @@ func (rt *_router) getContextReply(
 	for _, ext := range possibleExtensions {
 		p := filepath.Join("./uploads/profiles", ctx.UserIdentifier+ext)
 		if _, err := os.Stat(p); err == nil {
-			photoURL = "/uploads/profiles/" + ctx.UserIdentifier + ext
+			photoURL = "/v1/uploads/profiles/" + ctx.UserIdentifier + ext
 			break
 		}
 	}
