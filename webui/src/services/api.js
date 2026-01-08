@@ -26,9 +26,39 @@ export function isAuthenticated() {
 function buildAuthHeaders(extraHeaders = {}) {
   const token = getToken()
   const headers = { ...(extraHeaders || {}) }
-
   if (token) headers.Authorization = `Bearer ${token}`
   return headers
+}
+
+/* ----------------------------------------------------------------------
+ * DIRECT CHAT TITLES (per-user, no more "Chat 3" after logout)
+ * ------------------------------------------------------------------- */
+
+function directChatTitlesKey() {
+  // key per utente (token/identifier). Se non c'è token => key anonima.
+  const t = getToken()
+  return t ? `directChatNames:${t}` : 'directChatNames:anon'
+}
+
+function loadDirectTitleMap() {
+  const raw = localStorage.getItem(directChatTitlesKey())
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+export function getDirectChatTitle(chatId) {
+  const map = loadDirectTitleMap()
+  return map[String(chatId)] || ''
+}
+
+export function saveDirectChatTitle(chatId, displayName) {
+  const map = loadDirectTitleMap()
+  map[String(chatId)] = displayName
+  localStorage.setItem(directChatTitlesKey(), JSON.stringify(map))
 }
 
 /* ----------------------------------------------------------------------
@@ -66,6 +96,10 @@ async function request(path, { method = 'GET', data, headers, params } = {}) {
  * ------------------------------------------------------------------- */
 
 export function logout() {
+  // salva token corrente per pulire la sua mappa titoli
+  const t = getToken()
+  if (t) localStorage.removeItem(`directChatNames:${t}`)
+
   localStorage.removeItem('token')
   localStorage.removeItem('username')
   localStorage.removeItem('photoUrl')
@@ -113,8 +147,7 @@ export async function setMyPhoto(file) {
 
   return request('/users/photo', {
     method: 'PUT',
-    // Important: some servers require explicit multipart content-type
-    headers: { 'Content-Type': 'multipart/form-data' },
+    // NON forzare content-type: axios lo mette da solo col boundary
     data: formData
   })
 }
@@ -122,15 +155,13 @@ export async function setMyPhoto(file) {
 export async function getContext() {
   const ctx = await request('/context', { method: 'GET' })
 
-  // sync username
   if (ctx?.username !== undefined) {
     localStorage.setItem('username', ctx.username || '')
   }
 
-  // sync photoUrl (ensure correct prefix)
   if (ctx?.photoUrl !== undefined) {
     let p = ctx.photoUrl || ''
-    // legacy fix: old backend returned "/uploads/..." (missing /v1)
+    // legacy fix
     if (p && p.startsWith('/uploads/')) p = `/v1${p}`
     localStorage.setItem('photoUrl', p)
   }
