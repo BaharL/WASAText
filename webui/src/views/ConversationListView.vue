@@ -243,7 +243,9 @@ import {
   getMyConversations,
   listUsers,
   createDirect,
-  createGroup
+  createGroup,
+  getDirectChatTitle,
+  saveDirectChatTitle
 } from '../services/api.js'
 
 const router = useRouter()
@@ -318,7 +320,7 @@ function getConversationTitle(c) {
   const base = c.title || c.name || c.chatName || `Chat ${c.id}`
 
   if (c.isGroup === false) {
-    const saved = getSavedDirectTitle(c.id)
+    const saved = getDirectChatTitle(c.id)
     if (saved) return saved
   }
   return base
@@ -472,7 +474,7 @@ async function handleUserClick(u) {
     // Save direct title locally (so we don't show "Chat 1")
     if (created?.chatId) {
       const display = u.username || u.name || 'Direct'
-      saveDirectTitle(created.chatId, display)
+      saveDirectChatTitle(created.chatId, display)
     }
 
     await loadConversations()
