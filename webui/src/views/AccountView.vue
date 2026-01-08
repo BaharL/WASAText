@@ -10,8 +10,15 @@
         <!-- Current user card -->
         <div class="card mb-3">
           <div class="card-body d-flex align-items-center">
+            <!-- Avatar (photo if available, otherwise initial) -->
             <div class="profile-avatar me-3">
-              {{ initial }}
+              <img
+                v-if="photoUrl"
+                :src="photoUrl"
+                alt="avatar"
+                class="avatar-img"
+              >
+              <span v-else class="avatar-fallback">{{ initial }}</span>
             </div>
 
             <div>
@@ -48,12 +55,10 @@
                 <span v-else>Save username</span>
               </button>
 
-              <!-- Error message (shown when API fails / conflict / validation) -->
               <p v-if="usernameError" class="text-danger mt-2 small">
                 {{ usernameError }}
               </p>
 
-              <!-- Success message -->
               <p v-if="usernameSuccess" class="text-success mt-2 small">
                 Username updated successfully.
               </p>
@@ -68,7 +73,21 @@
       <div class="col-md-6 mb-4">
         <div class="card">
           <div class="card-body">
-            <h2 class="h5 mb-3">Profile photo</h2>
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h2 class="h5 mb-0">Profile photo</h2>
+
+              <!-- Second circle (same avatar as left card) -->
+              <div class="profile-avatar profile-avatar-sm">
+                <img
+                  v-if="photoUrl"
+                  :src="photoUrl"
+                  alt="avatar"
+                  class="avatar-img"
+                >
+                <span v-else class="avatar-fallback">{{ initial }}</span>
+              </div>
+            </div>
+
             <p class="text-muted small mb-2">
               Upload a profile picture (JPG/PNG, max 10 MB).
             </p>
@@ -110,36 +129,37 @@
  * AccountView.vue
  *
  * Responsibilities:
- * - Display current username + avatar initial
- * - Allow user to change username
- * - Allow user to upload a profile photo
+ * - Show current username + avatar (photo or initial)
+ * - Change username
+ * - Upload profile photo (and persist it in localStorage)
  *
- * Notes:
- * - We keep username/photoUrl in localStorage so Sidebar can render them quickly.
- * - After any update, we dispatch a "profile-updated" event so Sidebar can refresh.
- * - __API_URL__ is injected by Vite (in your project it's usually "/api").
+ * Persistence rules:
+ * - localStorage keys used across the app:
+ *   - username
+ *   - photoUrl
+ * - After updating: dispatch "profile-updated" so Sidebar can refresh.
  */
 
 import { computed, ref } from 'vue'
-
-// IMPORTANT:
-// This file is under src/views/, so services are typically one level up: "../services/api.js"
 import { setMyUserName, setMyPhoto, getContext } from '../services/api.js'
 
 /* ------------------------------------------------------------------
  * STATE
  * ------------------------------------------------------------------ */
 
-// Username state (loaded from localStorage at startup)
+// Username
 const username = ref(localStorage.getItem('username') || '')
 const newUsername = ref(username.value)
 
-// UI state for username change
+// Photo url (persisted)
+const photoUrl = ref(localStorage.getItem('photoUrl') || '')
+
+// UI state: username
 const savingUsername = ref(false)
 const usernameError = ref('')
 const usernameSuccess = ref(false)
 
-// UI state for photo upload
+// UI state: photo
 const selectedPhoto = ref(null)
 const uploadingPhoto = ref(false)
 const photoMessage = ref('')
@@ -149,7 +169,6 @@ const photoError = ref(false)
  * COMPUTED
  * ------------------------------------------------------------------ */
 
-// First letter shown in the blue circle (avatar placeholder)
 const initial = computed(() =>
   username.value ? username.value.charAt(0).toUpperCase() : '?'
 )
@@ -158,14 +177,12 @@ const initial = computed(() =>
  * HELPERS
  * ------------------------------------------------------------------ */
 
-/**
- * Normalize backend errors into a clearer UI message.
- * We especially want a clean message when username is already taken.
- */
+function notifyProfileUpdated() {
+  window.dispatchEvent(new Event('profile-updated'))
+}
+
 function normalizeUsernameError(err) {
   const raw = (err?.message || '').toLowerCase()
-
-  // Detect typical "conflict / already exists" messages
   if (
     raw.includes('already') ||
     raw.includes('exists') ||
@@ -175,55 +192,27 @@ function normalizeUsernameError(err) {
   ) {
     return 'This username is already taken. Please choose another one.'
   }
-
   return err?.message || 'Failed to change username.'
 }
 
 /**
- * Convert a returned photoUrl into a usable URL for the frontend.
- *
- * Why this exists:
- * - In your setup, __API_URL__ is usually "/api" (not a full origin).
- * - Backend could return:
- *    - absolute URL: "https://.../uploads/..."
- *    - API path: "/api/uploads/..."
- *    - plain path: "/uploads/..."
- *
- * We must avoid ending up with "/api/api/uploads/..." (double /api).
+ * Some backends return photoUrl in /context, others return it in the upload response.
+ * We try both to avoid "photo disappears" issues.
  */
-function buildAbsolutePhotoUrl(photoUrl) {
-  if (!photoUrl) return ''
-
-  // Already absolute (http/https)
-  if (photoUrl.startsWith('http')) return photoUrl
-
-  // Already includes API prefix
-  if (photoUrl.startsWith('/api/')) return photoUrl
-
-  // Otherwise prefix with __API_URL__ (typically "/api")
-  // Ensure we don't create missing/duplicate slashes
-  const needsSlash = !photoUrl.startsWith('/')
-  return `${__API_URL__}${needsSlash ? '/' : ''}${photoUrl}`
-}
-
-/**
- * Notify other UI pieces (e.g., Sidebar) that profile data changed.
- */
-function notifyProfileUpdated() {
-  window.dispatchEvent(new Event('profile-updated'))
+function extractPhotoUrlFromContext(ctx) {
+  return (
+    ctx?.photoUrl ||
+    ctx?.photo_url ||
+    ctx?.photo ||
+    ctx?.avatarUrl ||
+    ''
+  )
 }
 
 /* ------------------------------------------------------------------
  * ACTIONS
  * ------------------------------------------------------------------ */
 
-/**
- * Change username:
- * - Validate
- * - Call API
- * - Update local state + localStorage
- * - Notify Sidebar
- */
 async function onChangeUsername() {
   usernameError.value = ''
   usernameSuccess.value = false
@@ -233,11 +222,8 @@ async function onChangeUsername() {
 
   try {
     savingUsername.value = true
-
-    // Backend call
     await setMyUserName(trimmed)
 
-    // Update local state/storage
     username.value = trimmed
     localStorage.setItem('username', trimmed)
 
@@ -251,22 +237,12 @@ async function onChangeUsername() {
   }
 }
 
-/**
- * Track selected image file.
- */
 function onPhotoSelected(event) {
   selectedPhoto.value = event.target.files?.[0] || null
   photoMessage.value = ''
   photoError.value = false
 }
 
-/**
- * Upload photo:
- * - PUT /users/photo (multipart/form-data)
- * - Then reload /context to get the final photoUrl
- * - Store photoUrl in localStorage
- * - Notify Sidebar
- */
 async function onUploadPhoto() {
   if (!selectedPhoto.value) return
 
@@ -275,18 +251,32 @@ async function onUploadPhoto() {
   photoError.value = false
 
   try {
-    // 1) Upload file
-    await setMyPhoto(selectedPhoto.value)
+    // 1) Upload
+    const uploadRes = await setMyPhoto(selectedPhoto.value)
 
-    // 2) Reload context (server decides final URL/path)
-    const ctx = await getContext()
+    // 2) Prefer server context if it provides photoUrl, otherwise fallback to upload response
+    let finalUrl = ''
+    try {
+      const ctx = await getContext()
+      finalUrl = extractPhotoUrlFromContext(ctx)
+    } catch (_) {
+      // ignore if /context does not have photoUrl or fails
+    }
 
-    // 3) Save photoUrl locally (used by Sidebar)
-    if (ctx.photoUrl) {
-      const url = buildAbsolutePhotoUrl(ctx.photoUrl)
-      localStorage.setItem('photoUrl', url)
+    if (!finalUrl) {
+      finalUrl =
+        uploadRes?.photoUrl ||
+        uploadRes?.url ||
+        uploadRes?.mediaUrl ||
+        ''
+    }
+
+    if (finalUrl) {
+      photoUrl.value = finalUrl
+      localStorage.setItem('photoUrl', finalUrl)
     } else {
-      localStorage.removeItem('photoUrl')
+      // If backend doesn't return URL at all, keep previous one (do NOT delete)
+      // This prevents "photo disappears" after upload.
     }
 
     notifyProfileUpdated()
@@ -305,13 +295,32 @@ async function onUploadPhoto() {
 .profile-avatar {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: #0d6efd;
   color: #fff;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 1.3rem;
+}
+
+.profile-avatar-sm {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
