@@ -324,9 +324,6 @@ function getConversationTitle(c) {
   return base
 }
 
-  return base
-}
-
 function getConversationPhoto(c) {
   return c.photoUrl || c.photo_url || c.photo || ''
 }
