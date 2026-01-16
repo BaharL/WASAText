@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ErrorMsg from '../components/ErrorMsg.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
@@ -178,8 +178,9 @@ import {
 } from '../services/api.js'
 
 const route = useRoute()
-// lascio stringa: l’API accetta anche "123" e la converte in numero
-const chatId = route.params.chatId
+
+// 🔴 IMPORTANT: route.params è reattivo, quindi facciamo una ref aggiornata via watch
+const chatId = ref(route.params.chatId)
 
 const title = ref('Conversation')
 const messages = ref([])
@@ -239,17 +240,19 @@ function scrollToBottom() {
 }
 
 /* Carica dettagli + messaggi conversazione */
-async function loadConversation() {
-  if (!chatId) {
+async function loadConversation({ silent = false } = {}) {
+  if (!chatId.value) {
     error.value = 'Chat non valida.'
     return
   }
 
-  loading.value = true
+  if (!silent) {
+    loading.value = true
+  }
   error.value = ''
 
   try {
-    const data = await getConversation(chatId)
+    const data = await getConversation(chatId.value)
 
     // data.messages (schema del prof) oppure direttamente array
     messages.value = Array.isArray(data) ? data : (data.messages || [])
@@ -265,23 +268,24 @@ async function loadConversation() {
     scrollToBottom()
   } catch (e) {
     console.error(e)
-    error.value = e.message || 'Failed to load messages.'
+    // durante polling silenzioso non vogliamo “sporcare” l’UI con errori momentanei
+    if (!silent) error.value = e.message || 'Failed to load messages.'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
 /* Invia messaggio testuale */
 async function handleSend() {
   const text = draft.value.trim()
-  if (!text || !chatId) return
+  if (!text || !chatId.value) return
 
   sending.value = true
   error.value = ''
 
   try {
     await sendMessage({
-      chatId: Number(chatId),
+      chatId: Number(chatId.value),
       kind: 'text',
       text
     })
@@ -301,7 +305,7 @@ function onFileSelected(e) {
 }
 
 async function handleSendMedia() {
-  if (!selectedFile.value || !chatId) return
+  if (!selectedFile.value || !chatId.value) return
 
   sendingMedia.value = true
   error.value = ''
@@ -315,7 +319,7 @@ async function handleSendMedia() {
 
     // NOTE: backend might expect kind 'media' OR 'photo' and field name might differ
     await sendMessage({
-      chatId: Number(chatId),
+      chatId: Number(chatId.value),
       kind: 'media',
       mediaUrl
     })
@@ -370,9 +374,48 @@ async function onDelete(m) {
   }
 }
 
-onMounted(() => {
-  loadConversation()
+/* -------------------------
+ * ✅ AUTREFRESH (Polling)
+ * ------------------------- */
+let pollTimer = null
+
+function startPolling() {
+  stopPolling()
+  // ogni 2.5s: carico “silenzioso” e NON blocco UI
+  pollTimer = setInterval(async () => {
+    // non fare polling mentre stai caricando o inviando
+    if (loading.value || sending.value || sendingMedia.value) return
+    // evita refresh mentre l’utente ha il popover azioni aperto (eviti click “che scappa”)
+    if (showActionsFor.value !== null) return
+    await loadConversation({ silent: true })
+  }, 2500)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+onMounted(async () => {
+  await loadConversation()
+  startPolling()
 })
+
+onBeforeUnmount(() => {
+  stopPolling()
+})
+
+// se cambi chatId (navigazione tra conversazioni) ricarica e riavvia polling
+watch(
+  () => route.params.chatId,
+  async (newId) => {
+    chatId.value = newId
+    await loadConversation()
+    startPolling()
+  }
+)
 </script>
 
 <style scoped>
