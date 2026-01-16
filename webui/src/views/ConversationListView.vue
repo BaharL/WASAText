@@ -222,7 +222,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 import ErrorMsg from '../components/ErrorMsg.vue'
@@ -347,8 +347,10 @@ function getConversationAvatarLabel(c) {
 /* ---------------------------
  * Load conversations
  * --------------------------- */
-async function loadConversations() {
-  loading.value = true
+async function loadConversations({ silent = false } = {}) {
+  if (!silent) {
+    loading.value = true
+  }
   error.value = ''
 
   try {
@@ -356,9 +358,33 @@ async function loadConversations() {
     conversations.value = data?.conversations || []
   } catch (e) {
     console.error(e)
-    error.value = e.message || 'Failed to load conversations.'
+    if (!silent) error.value = e.message || 'Failed to load conversations.'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+  }
+}
+
+/* ---------------------------
+ * ✅ AUTREFRESH (Polling)
+ * --------------------------- */
+let pollTimer = null
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    // se stai creando una chat o cercando utenti, non stressiamo la rete
+    if (loading.value || creating.value || searching.value) return
+    // mentre sei nel pannello "new chat" evitiamo refresh (così non “salta” la UI)
+    if (newChatMode.value) return
+
+    await loadConversations({ silent: true })
+  }, 8000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -508,8 +534,13 @@ function openConversation(c) {
   router.push({ name: 'Conversation', params: { chatId: c.id } })
 }
 
-onMounted(() => {
-  loadConversations()
+onMounted(async () => {
+  await loadConversations()
+  startPolling()
+})
+
+onBeforeUnmount(() => {
+  stopPolling()
 })
 </script>
 
