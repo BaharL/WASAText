@@ -19,6 +19,9 @@ type AppDatabase interface {
 	// SetUserName updates the user's name given their identifier.
 	SetUserName(ctx context.Context, identifier string, newName string) error
 
+	// SetUserPhoto persists the user's profile photo URL.
+	SetUserPhoto(ctx context.Context, identifier string, photoURL string) error
+
 	// GetName returns the username for the given identifier (Bearer token).
 	GetName(ctx context.Context, identifier string) (string, error)
 
@@ -112,8 +115,9 @@ func New(db *sql.DB) (AppDatabase, error) {
 	if _, err := db.Exec(usersStmt); err != nil {
 		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
-	
-	// Add photo_url column if missing (SQLite: ignore error if already exists)
+
+	// Add photo_url column if missing.
+	// SQLite does not support IF NOT EXISTS for columns, so we ignore the error if it already exists.
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN photo_url TEXT;`)
 
 	// Create tables for messages and reactions.
@@ -121,6 +125,7 @@ func New(db *sql.DB) (AppDatabase, error) {
 		return nil, fmt.Errorf("error creating message tables: %w", err)
 	}
 
+	// Conversations
 	convStmt := `
 	CREATE TABLE IF NOT EXISTS conversations (
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +134,6 @@ func New(db *sql.DB) (AppDatabase, error) {
 	    photo_url TEXT,
 	    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`
-
 	if _, err := db.Exec(convStmt); err != nil {
 		return nil, fmt.Errorf("error creating conversations table: %w", err)
 	}
