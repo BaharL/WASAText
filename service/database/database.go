@@ -112,6 +112,9 @@ func New(db *sql.DB) (AppDatabase, error) {
 	if _, err := db.Exec(usersStmt); err != nil {
 		return nil, fmt.Errorf("error creating users table: %w", err)
 	}
+	
+	// Add photo_url column if missing (SQLite: ignore error if already exists)
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN photo_url TEXT;`)
 
 	// Create tables for messages and reactions.
 	if err := initMessageTables(db); err != nil {
