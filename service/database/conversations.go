@@ -12,15 +12,17 @@ type ConversationSummary struct {
 	ID          int64    `json:"id"`
 	Title       string   `json:"title"`
 	IsGroup     bool     `json:"isGroup"`
+	PhotoURL    *string  `json:"photoUrl,omitempty"`
 	LastMessage *Message `json:"lastMessage,omitempty"`
 }
 
 // ListUserConversations restituisce tutte le conversazioni a cui partecipa l’utente,
-// con l’ultimo messaggio (se presente).
+// con l’ultimo messaggio (se presente) + title/photo "giusti" per direct e group.
 func (db *appdbimpl) ListUserConversations(
 	ctx context.Context,
 	userIdentifier string,
 ) ([]ConversationSummary, error) {
+
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return nil, err
@@ -29,39 +31,101 @@ func (db *appdbimpl) ListUserConversations(
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
 			c.id,
-			COALESCE(c.name, printf('Chat %d', c.id)) AS title,
 			c.type,
-			MAX(m.id) AS last_message_id
+			c.name,
+			c.photo_url,
+			MAX(m.id) AS last_message_id,
+
+			-- Direct: nome dell'altro utente (rispetto a me)
+			(
+				SELECT u2.name
+				FROM conversation_members cm2
+				JOIN users u2 ON u2.id = cm2.user_id
+				WHERE cm2.conversation_id = c.id AND cm2.user_id <> ?
+				LIMIT 1
+			) AS direct_other_name,
+
+			(
+				SELECT u2.photo_url
+				FROM conversation_members cm2
+				JOIN users u2 ON u2.id = cm2.user_id
+				WHERE cm2.conversation_id = c.id AND cm2.user_id <> ?
+				LIMIT 1
+			) AS direct_other_photo
+
 		FROM conversations c
 		JOIN conversation_members cm ON cm.conversation_id = c.id
 		LEFT JOIN messages m ON m.chat_id = c.id
 		WHERE cm.user_id = ?
-		GROUP BY c.id, title, c.type
+		GROUP BY c.id, c.type, c.name, c.photo_url
 		ORDER BY last_message_id DESC, c.id DESC
-	`, userID)
+	`, userID, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list user conversations: %w", err)
 	}
 	defer rows.Close()
 
-	var convs []ConversationSummary
+	convs := make([]ConversationSummary, 0)
 
 	for rows.Next() {
 		var conv ConversationSummary
-		var lastMsgID sql.NullInt64
-		var convType sql.NullString
 
-		if err := rows.Scan(&conv.ID, &conv.Title, &convType, &lastMsgID); err != nil {
+		var convType sql.NullString
+		var groupName sql.NullString
+		var groupPhoto sql.NullString
+		var lastMsgID sql.NullInt64
+
+		var directOtherName sql.NullString
+		var directOtherPhoto sql.NullString
+
+		if err := rows.Scan(
+			&conv.ID,
+			&convType,
+			&groupName,
+			&groupPhoto,
+			&lastMsgID,
+			&directOtherName,
+			&directOtherPhoto,
+		); err != nil {
 			return nil, fmt.Errorf("scan user conversations: %w", err)
 		}
 
-		// NEW: isGroup basato su conversations.type
-		if convType.Valid && convType.String == "group" {
-			conv.IsGroup = true
+		// Tipo conversazione
+		isGroup := convType.Valid && convType.String == "group"
+		conv.IsGroup = isGroup
+
+		// Title + PhotoURL: logica principale
+		if isGroup {
+			// Title: se manca name, fallback "Chat <id>"
+			if groupName.Valid && groupName.String != "" {
+				conv.Title = groupName.String
+			} else {
+				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
+			}
+
+			// Photo: prende c.photo_url
+			if groupPhoto.Valid && groupPhoto.String != "" {
+				s := groupPhoto.String
+				conv.PhotoURL = &s
+			}
+
 		} else {
-			conv.IsGroup = false
+			// Direct chat: title = nome dell'altro utente
+			if directOtherName.Valid && directOtherName.String != "" {
+				conv.Title = directOtherName.String
+			} else {
+				// fallback (non dovrebbe succedere se direct ha 2 membri)
+				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
+			}
+
+			// Direct: photo = foto dell'altro utente
+			if directOtherPhoto.Valid && directOtherPhoto.String != "" {
+				s := directOtherPhoto.String
+				conv.PhotoURL = &s
+			}
 		}
 
+		// Last message (se c'è)
 		if lastMsgID.Valid {
 			lastMsg, err := db.getMessageByID(ctx, lastMsgID.Int64)
 			if err != nil {
@@ -90,6 +154,7 @@ func (db *appdbimpl) ListConversationMessages(
 	userIdentifier string,
 	conversationID int64,
 ) ([]Message, error) {
+
 	// Trovo l'ID interno dell'utente corrente
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
