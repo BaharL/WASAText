@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"io"
+	"os"
+	"path/filepath"
 )
 
 // CreateGroup creates a new group conversation and adds the owner plus
