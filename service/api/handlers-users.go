@@ -187,7 +187,15 @@ func (rt *_router) setMyPhoto(
 	// ✅ FIX: ServeFiles è sotto /v1/uploads/...
 	photoURL := "/v1/uploads/profiles/" + filename
 
+	// ✅ QUESTO è il pezzo che manca: salva nel DB (users.photo_url)
+	if err := rt.db.SetUserPhoto(r.Context(), ctx.UserIdentifier, photoURL); err != nil {
+		ctx.Logger.WithError(err).Error("cannot persist user photo url")
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{
 		"photoUrl": photoURL,
 	})
 }
+
