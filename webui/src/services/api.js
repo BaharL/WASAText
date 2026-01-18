@@ -253,6 +253,17 @@ export async function setGroupPhoto(chatId, photoUrl) {
   })
 }
 
+export async function setGroupPhoto(chatId, file) {
+  const form = new FormData()
+  form.append('file', file)
+
+  return apiFetch(`/groups/${chatId}/photo`, {
+    method: 'PUT',
+    body: form,
+  })
+}
+
+
 /* ----------------------------------------------------------------------
  * MEDIA
  * ------------------------------------------------------------------- */
