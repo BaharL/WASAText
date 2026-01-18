@@ -298,10 +298,6 @@ function toImgSrc(url) {
 function getConversationTitle(c) {
   const base = c.title || c.name || c.chatName || `Chat ${c.id}`
 
-  if (c.isGroup === false) {
-    const saved = getDirectChatTitle(c.id)
-    if (saved) return saved
-  }
   return base
 }
 
