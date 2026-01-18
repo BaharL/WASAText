@@ -246,23 +246,16 @@ export async function setGroupName(chatId, name) {
   })
 }
 
-export async function setGroupPhoto(chatId, photoUrl) {
+export async function setGroupPhoto(chatId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
   return request(`/groups/${chatId}/photo`, {
     method: 'PUT',
-    data: { photoUrl }
+    // NON mettere headers Content-Type: axios lo mette con boundary
+    data: formData
   })
 }
-
-export async function setGroupPhoto(chatId, file) {
-  const form = new FormData()
-  form.append('file', file)
-
-  return apiFetch(`/groups/${chatId}/photo`, {
-    method: 'PUT',
-    body: form,
-  })
-}
-
 
 /* ----------------------------------------------------------------------
  * MEDIA
