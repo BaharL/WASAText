@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"io"
-	"os"
-	"path/filepath"
 )
 
 // CreateGroup creates a new group conversation and adds the owner plus
@@ -29,16 +26,13 @@ func (db *appdbimpl) CreateGroup(
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-
-	defer func() {
-		_ = tx.Rollback()
-	}()
+	defer func() { _ = tx.Rollback() }()
 
 	// 1) Insert into conversations.
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO conversations (type, name)
 		VALUES ('group', ?)
-	`, name)
+	`, strings.TrimSpace(name))
 	if err != nil {
 		return 0, fmt.Errorf("cannot insert conversation: %w", err)
 	}
@@ -64,7 +58,6 @@ func (db *appdbimpl) CreateGroup(
 		}
 		userID, err := db.getUserIDByIdentifier(ctx, ident)
 		if err != nil {
-			// You may choose to skip invalid users instead of failing.
 			return 0, fmt.Errorf("cannot resolve member %q: %w", ident, err)
 		}
 		if _, err := tx.ExecContext(ctx, `
@@ -105,7 +98,7 @@ func (db *appdbimpl) AddMembersToGroup(
 	`, chatID, requesterID).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("requester not member of group or group not found: %w", err)
+			return sql.ErrNoRows
 		}
 		return fmt.Errorf("cannot check requester membership: %w", err)
 	}
@@ -150,12 +143,11 @@ func (db *appdbimpl) LeaveGroup(
 		return fmt.Errorf("cannot leave group: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err == nil && affected == 0 {
+	affected, raErr := res.RowsAffected()
+	if raErr == nil && affected == 0 {
 		return sql.ErrNoRows
 	}
-
-	return err
+	return raErr
 }
 
 // SetGroupName updates the name of the group (if requester is a member).
@@ -175,12 +167,13 @@ func (db *appdbimpl) SetGroupName(
 	var exists int
 	err = db.c.QueryRowContext(ctx, `
 		SELECT 1
-		FROM conversation_members
-		WHERE conversation_id = ? AND user_id = ?
+		FROM conversation_members cm
+		JOIN conversations c ON c.id = cm.conversation_id
+		WHERE cm.conversation_id = ? AND cm.user_id = ? AND c.type = 'group'
 	`, chatID, requesterID).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("requester not member of group: %w", err)
+			return sql.ErrNoRows
 		}
 		return fmt.Errorf("cannot check requester membership: %w", err)
 	}
@@ -189,7 +182,7 @@ func (db *appdbimpl) SetGroupName(
 		UPDATE conversations
 		SET name = ?
 		WHERE id = ? AND type = 'group'
-	`, newName, chatID)
+	`, strings.TrimSpace(newName), chatID)
 	if err != nil {
 		return fmt.Errorf("cannot update group name: %w", err)
 	}
@@ -197,91 +190,42 @@ func (db *appdbimpl) SetGroupName(
 	return nil
 }
 
-// SetGroupPhoto sets or updates the photo URL of the group.
-func (rt *_router) setGroupPhoto(
-  w http.ResponseWriter,
-  r *http.Request,
-  ps httprouter.Params,
-  ctx reqcontext.RequestContext,
-) {
-  if ctx.UserIdentifier == "" {
-    writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
-    return
-  }
+// SetGroupPhoto updates photo_url of the group (if requester is a member).
+func (db *appdbimpl) SetGroupPhoto(
+	ctx context.Context,
+	requesterIdentifier string,
+	chatID int64,
+	photoURL string,
+) error {
 
-  chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
-  if err != nil || chatID <= 0 {
-    writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
-    return
-  }
+	requesterID, err := db.getUserIDByIdentifier(ctx, requesterIdentifier)
+	if err != nil {
+		return err
+	}
 
-  // Max 10MB
-  if err := r.ParseMultipartForm(10 << 20); err != nil {
-    writeErrorJSON(w, http.StatusBadRequest, "Invalid multipart form")
-    return
-  }
+	// Ensure requester is a member and this is a group chat.
+	var exists int
+	err = db.c.QueryRowContext(ctx, `
+		SELECT 1
+		FROM conversation_members cm
+		JOIN conversations c ON c.id = cm.conversation_id
+		WHERE cm.conversation_id = ? AND cm.user_id = ? AND c.type = 'group'
+	`, chatID, requesterID).Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+		return fmt.Errorf("cannot check requester membership: %w", err)
+	}
 
-  file, header, err := r.FormFile("file")
-  if err != nil {
-    writeErrorJSON(w, http.StatusBadRequest, "Missing file field")
-    return
-  }
-  defer file.Close()
+	_, err = db.c.ExecContext(ctx, `
+		UPDATE conversations
+		SET photo_url = ?
+		WHERE id = ? AND type = 'group'
+	`, photoURL, chatID)
+	if err != nil {
+		return fmt.Errorf("cannot update group photo: %w", err)
+	}
 
-  contentType := header.Header.Get("Content-Type")
-  if contentType == "" {
-    buf := make([]byte, 512)
-    n, _ := file.Read(buf)
-    contentType = http.DetectContentType(buf[:n])
-    if _, err := file.Seek(0, io.SeekStart); err != nil {
-      writeErrorJSON(w, http.StatusInternalServerError, "cannot reset file reader")
-      return
-    }
-  }
-
-  if !isValidMediaType(contentType) {
-    writeErrorJSON(w, http.StatusBadRequest, "unsupported media type")
-    return
-  }
-
-  ext := getExtensionFromContentType(contentType)
-  if ext == "" {
-    ext = strings.ToLower(filepath.Ext(header.Filename))
-  }
-  if ext == "" {
-    ext = ".jpg"
-  }
-
-  // uploads/groups
-  if err := os.MkdirAll("./uploads/groups", 0o755); err != nil {
-    writeErrorJSON(w, http.StatusInternalServerError, "cannot create groups directory")
-    return
-  }
-
-  filename := fmt.Sprintf("group-%d%s", chatID, ext)
-  dstPath := filepath.Join("./uploads/groups", filename)
-
-  dst, err := os.Create(dstPath)
-  if err != nil {
-    writeErrorJSON(w, http.StatusInternalServerError, "cannot create destination file")
-    return
-  }
-  defer dst.Close()
-
-  if _, err := io.Copy(dst, file); err != nil {
-    writeErrorJSON(w, http.StatusInternalServerError, "cannot save file")
-    return
-  }
-
-  // ServeFiles è /v1/uploads/...
-  photoURL := "/v1/uploads/groups/" + filename
-
-  if err := rt.db.SetGroupPhoto(r.Context(), ctx.UserIdentifier, chatID, photoURL); err != nil {
-    ctx.Logger.WithError(err).Error("cannot persist group photo url")
-    writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
-    return
-  }
-
-  writeJSON(w, http.StatusOK, map[string]string{"photoUrl": photoURL})
+	return nil
 }
-
