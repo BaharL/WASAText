@@ -2,20 +2,60 @@
   <div class="conversation-page">
     <!-- Header -->
     <header class="conv-header d-flex align-items-center justify-content-between">
-      <div>
-        <h1 class="h5 mb-0">{{ title }}</h1>
-        <small class="text-muted">Chat ID: {{ chatId }}</small>
+      <div class="d-flex align-items-center gap-2">
+        <!-- Avatar -->
+        <div class="conv-avatar">
+          <img
+            v-if="conversationPhoto"
+            :src="toImgSrc(conversationPhoto)"
+            alt="avatar"
+            class="conv-avatar-img"
+          >
+          <span v-else class="conv-avatar-fallback">
+            {{ conversationAvatarLabel }}
+          </span>
+        </div>
+
+        <div>
+          <h1 class="h5 mb-0">{{ title }}</h1>
+          <small class="text-muted">Chat ID: {{ chatId }}</small>
+        </div>
       </div>
 
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-secondary"
-        :disabled="loading"
-        @click="loadConversation"
-      >
-        <span v-if="loading">Reloading…</span>
-        <span v-else>Reload</span>
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <!-- Group photo actions (solo gruppi) -->
+        <div v-if="isGroup" class="d-flex align-items-center gap-2">
+          <input
+            ref="groupPhotoInputEl"
+            type="file"
+            accept="image/*"
+            class="d-none"
+            :disabled="loading || uploadingGroupPhoto"
+            @change="onGroupPhotoSelected"
+          >
+
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            :disabled="loading || uploadingGroupPhoto"
+            @click="openGroupPhotoPicker"
+            title="Change group photo"
+          >
+            <span v-if="uploadingGroupPhoto">Uploading…</span>
+            <span v-else>Change photo</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          :disabled="loading"
+          @click="loadConversation"
+        >
+          <span v-if="loading">Reloading…</span>
+          <span v-else>Reload</span>
+        </button>
+      </div>
     </header>
 
     <!-- Error -->
@@ -163,7 +203,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import ErrorMsg from '../components/ErrorMsg.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
@@ -174,12 +214,12 @@ import {
   uploadMedia,
   addReaction,
   deleteMessage,
-  forwardMessage
+  forwardMessage,
+  setGroupPhoto
 } from '../services/api.js'
 
 const route = useRoute()
 
-// 🔴 IMPORTANT: route.params è reattivo, quindi facciamo una ref aggiornata via watch
 const chatId = ref(route.params.chatId)
 
 const title = ref('Conversation')
@@ -189,6 +229,56 @@ const sending = ref(false)
 const error = ref('')
 const draft = ref('')
 const messageListEl = ref(null)
+
+/* conversation metadata (title/photo/type) */
+const conversation = ref(null)
+
+const isGroup = computed(() => {
+  const c = conversation.value || {}
+  if (typeof c.isGroup === 'boolean') return c.isGroup
+  if (c.type) return String(c.type).toLowerCase() === 'group'
+  return false
+})
+
+const conversationPhoto = computed(() => {
+  const c = conversation.value || {}
+  return c.photoUrl || c.photo_url || c.photo || ''
+})
+
+const conversationAvatarLabel = computed(() => {
+  const t = (title.value || '').trim()
+  return t ? t.charAt(0).toUpperCase() : '?'
+})
+
+/* group photo upload */
+const groupPhotoInputEl = ref(null)
+const uploadingGroupPhoto = ref(false)
+
+function openGroupPhotoPicker() {
+  if (!groupPhotoInputEl.value) return
+  groupPhotoInputEl.value.value = '' // reset per poter scegliere lo stesso file
+  groupPhotoInputEl.value.click()
+}
+
+async function onGroupPhotoSelected(e) {
+  const file = e.target.files?.[0] || null
+  if (!file) return
+
+  uploadingGroupPhoto.value = true
+  error.value = ''
+
+  try {
+    await setGroupPhoto(Number(chatId.value), file)
+    // ricarica chat + (opzionale) fai sapere alla lista di refreshare
+    await loadConversation()
+    window.dispatchEvent(new Event('conversations-updated'))
+  } catch (err) {
+    console.error(err)
+    error.value = err.message || 'Failed to update group photo.'
+  } finally {
+    uploadingGroupPhoto.value = false
+  }
+}
 
 /* media */
 const selectedFile = ref(null)
@@ -207,57 +297,44 @@ function closeActions() {
   showActionsFor.value = null
 }
 
-/* Heuristica: se il messaggio è mio */
 function isMine(m) {
   return m.mine === true || m.direction === 'outgoing'
 }
 
-/* Formatta orario in HH:MM */
 function formatTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
-/* Convert media URL to usable img src */
 function toImgSrc(url) {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
-
-  // backend might return "/v1/..."
   if (url.startsWith('/v1/')) return `/api${url}`
-
-  // legacy "/uploads/..."
   if (url.startsWith('/uploads/')) return `/api/v1${url}`
-
   return url.startsWith('/') ? url : `/${url}`
 }
 
-/* Scroll in fondo dopo aggiornamento */
 function scrollToBottom() {
   const el = messageListEl.value
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/* Carica dettagli + messaggi conversazione */
 async function loadConversation({ silent = false } = {}) {
   if (!chatId.value) {
     error.value = 'Chat non valida.'
     return
   }
 
-  if (!silent) {
-    loading.value = true
-  }
+  if (!silent) loading.value = true
   error.value = ''
 
   try {
     const data = await getConversation(chatId.value)
 
-    // data.messages (schema del prof) oppure direttamente array
+    conversation.value = data || null
     messages.value = Array.isArray(data) ? data : (data.messages || [])
 
-    // Se il backend manda un titolo, usiamolo
     if (data?.title || data?.name || data?.chatName) {
       title.value = data.title || data.name || data.chatName
     } else {
@@ -268,14 +345,12 @@ async function loadConversation({ silent = false } = {}) {
     scrollToBottom()
   } catch (e) {
     console.error(e)
-    // durante polling silenzioso non vogliamo “sporcare” l’UI con errori momentanei
     if (!silent) error.value = e.message || 'Failed to load messages.'
   } finally {
     if (!silent) loading.value = false
   }
 }
 
-/* Invia messaggio testuale */
 async function handleSend() {
   const text = draft.value.trim()
   if (!text || !chatId.value) return
@@ -313,11 +388,9 @@ async function handleSendMedia() {
   try {
     const up = await uploadMedia(selectedFile.value)
 
-    // try common fields
     const mediaUrl = up?.url || up?.mediaUrl || up?.photoUrl || up?.path || up?.file || ''
     if (!mediaUrl) throw new Error('Upload ok but no media URL returned.')
 
-    // NOTE: backend might expect kind 'media' OR 'photo' and field name might differ
     await sendMessage({
       chatId: Number(chatId.value),
       kind: 'media',
@@ -334,7 +407,6 @@ async function handleSendMedia() {
   }
 }
 
-/* Actions */
 async function onReact(m) {
   try {
     await addReaction(m.id, reactionEmoji.value)
@@ -374,18 +446,13 @@ async function onDelete(m) {
   }
 }
 
-/* -------------------------
- * ✅ AUTREFRESH (Polling)
- * ------------------------- */
+/* Polling */
 let pollTimer = null
 
 function startPolling() {
   stopPolling()
-  // ogni 2.5s: carico “silenzioso” e NON blocco UI
   pollTimer = setInterval(async () => {
-    // non fare polling mentre stai caricando o inviando
-    if (loading.value || sending.value || sendingMedia.value) return
-    // evita refresh mentre l’utente ha il popover azioni aperto (eviti click “che scappa”)
+    if (loading.value || sending.value || sendingMedia.value || uploadingGroupPhoto.value) return
     if (showActionsFor.value !== null) return
     await loadConversation({ silent: true })
   }, 2500)
@@ -407,7 +474,6 @@ onBeforeUnmount(() => {
   stopPolling()
 })
 
-// se cambi chatId (navigazione tra conversazioni) ricarica e riavvia polling
 watch(
   () => route.params.chatId,
   async (newId) => {
@@ -422,7 +488,7 @@ watch(
 .conversation-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px); /* sottrae la navbar top del template */
+  height: calc(100vh - 56px);
 }
 
 .conv-header {
@@ -437,7 +503,6 @@ watch(
   background: #f5f7fb;
 }
 
-/* Lista messaggi */
 .message-list {
   list-style: none;
   padding: 0;
@@ -490,7 +555,6 @@ watch(
   background: #e9ecef;
 }
 
-/* Media */
 .msg-img {
   max-width: 260px;
   max-height: 260px;
@@ -498,7 +562,6 @@ watch(
   display: block;
 }
 
-/* Actions */
 .bubble-actions {
   position: relative;
   margin-top: 0.35rem;
@@ -519,7 +582,6 @@ watch(
   box-shadow: 0 10px 24px rgba(0,0,0,0.12);
 }
 
-/* Input in basso */
 .conv-input {
   padding: 0.5rem 0.75rem;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
@@ -529,5 +591,31 @@ watch(
 .input-row {
   display: flex;
   align-items: center;
+}
+
+/* Header avatar */
+.conv-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9ecef;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.conv-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.conv-avatar-fallback {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #495057;
 }
 </style>
