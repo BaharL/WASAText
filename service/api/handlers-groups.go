@@ -1,3 +1,4 @@
+// service/api/handler-groups.go
 package api
 
 import (
@@ -22,10 +23,6 @@ type addMembersRequest struct {
 
 type setGroupNameRequest struct {
 	Name string `json:"name"`
-}
-
-type setGroupPhotoRequest struct {
-	PhotoURL string `json:"photoUrl"`
 }
 
 type createGroupResponse struct {
@@ -185,49 +182,5 @@ func (rt *_router) setGroupName(
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Group name updated",
-	})
-}
-
-// ---------------------------------------------------------------------------
-// setGroupPhoto  → PUT /groups/:chatId/photo
-// ---------------------------------------------------------------------------
-
-func (rt *_router) setGroupPhoto(
-	w http.ResponseWriter,
-	r *http.Request,
-	ps httprouter.Params,
-	ctx reqcontext.RequestContext,
-) {
-	if ctx.UserIdentifier == "" {
-		writeErrorJSON(w, http.StatusUnauthorized, "Invalid or missing token")
-		return
-	}
-
-	chatID, err := strconv.ParseInt(ps.ByName("chatId"), 10, 64)
-	if err != nil || chatID <= 0 {
-		writeErrorJSON(w, http.StatusBadRequest, "Invalid chatId")
-		return
-	}
-
-	var req setGroupPhotoRequest
-	if err := readJSON(r, &req); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "Invalid JSON body")
-		return
-	}
-
-	req.PhotoURL = strings.TrimSpace(req.PhotoURL)
-	if req.PhotoURL == "" {
-		writeErrorJSON(w, http.StatusBadRequest, "photoUrl is required")
-		return
-	}
-
-	if err := rt.db.SetGroupPhoto(r.Context(), ctx.UserIdentifier, chatID, req.PhotoURL); err != nil {
-		ctx.Logger.WithError(err).Error("cannot set group photo")
-		writeErrorJSON(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"message": "Group photo updated",
 	})
 }
