@@ -233,8 +233,6 @@ import {
   listUsers,
   createDirect,
   createGroup,
-  setGroupPhoto,
-  getDirectChatTitle,
   saveDirectChatTitle
 } from '../services/api.js'
 
@@ -282,24 +280,14 @@ const filteredConversations = computed(() => {
  * --------------------------- */
 function toImgSrc(url) {
   if (!url) return ''
-
-  // absolute
   if (url.startsWith('http://') || url.startsWith('https://')) return url
-
-  // if backend returns "/uploads/..", in dev/prod we must go through /api
   if (url.startsWith('/uploads/')) return `/api/v1${url}`
-
-  // if already returned with "/v1/..", proxy needs /api prefix
   if (url.startsWith('/v1/')) return `/api${url}`
-
-  // fallback
   return url.startsWith('/') ? url : `/${url}`
 }
 
 function getConversationTitle(c) {
-  const base = c.title || c.name || c.chatName || `Chat ${c.id}`
-
-  return base
+  return c.title || c.name || c.chatName || `Chat ${c.id}`
 }
 
 function getConversationPhoto(c) {
@@ -345,14 +333,15 @@ function getConversationAvatarLabel(c) {
  * Load conversations
  * --------------------------- */
 async function loadConversations({ silent = false } = {}) {
-  if (!silent) {
-    loading.value = true
-  }
+  if (!silent) loading.value = true
   error.value = ''
 
   try {
     const data = await getMyConversations()
-    conversations.value = data?.conversations || []
+
+    // support BOTH array and object responses
+    const arr = Array.isArray(data) ? data : (data?.conversations || data?.items || [])
+    conversations.value = arr
   } catch (e) {
     console.error(e)
     if (!silent) error.value = e.message || 'Failed to load conversations.'
@@ -369,11 +358,8 @@ let pollTimer = null
 function startPolling() {
   stopPolling()
   pollTimer = setInterval(async () => {
-    // se stai creando una chat o cercando utenti, non stressiamo la rete
     if (loading.value || creating.value || searching.value) return
-    // mentre sei nel pannello "new chat" evitiamo refresh (così non “salta” la UI)
     if (newChatMode.value) return
-
     await loadConversations({ silent: true })
   }, 8000)
 }
@@ -411,7 +397,7 @@ function resetNewChatState() {
   searching.value = false
   userSearchError.value = ''
   createError.value = ''
-  groupPhotoFile.value = null
+  // ✅ rimosso groupPhotoFile: non esisteva e causava crash
 }
 
 let debounceTimer = null
