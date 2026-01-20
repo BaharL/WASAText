@@ -267,7 +267,6 @@ export async function uploadMedia(file) {
 
   return request('/media', {
     method: 'POST',
-    headers: { 'Content-Type': 'multipart/form-data' },
     data: formData
   })
 }
