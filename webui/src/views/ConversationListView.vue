@@ -233,6 +233,7 @@ import {
   listUsers,
   createDirect,
   createGroup,
+  setGroupPhoto,
   getDirectChatTitle,
   saveDirectChatTitle
 } from '../services/api.js'
@@ -410,6 +411,7 @@ function resetNewChatState() {
   searching.value = false
   userSearchError.value = ''
   createError.value = ''
+  groupPhotoFile.value = null
 }
 
 let debounceTimer = null
