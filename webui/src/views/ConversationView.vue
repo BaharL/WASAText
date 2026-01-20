@@ -1,5 +1,5 @@
 <template>
-  <div class="conversation-page">
+  <div class="conversation-page w-100">
     <!-- Header -->
     <header class="conv-header d-flex align-items-center justify-content-between">
       <div class="d-flex align-items-center gap-2">
@@ -115,7 +115,7 @@
                   ⋯
                 </button>
 
-                <div v-if="showActionsFor === m.id" class="actions-popover">
+                <div v-if="showActionsFor === m.id" class="actions-popover" @click.stop>
                   <!-- Reaction -->
                   <div class="d-flex gap-2 align-items-center mb-2">
                     <select v-model="reactionEmoji" class="form-select form-select-sm">
@@ -210,6 +210,7 @@ import LoadingSpinner from '../components/LoadingSpinner.vue'
 
 import {
   getConversation,
+  getMyConversations,
   sendMessage,
   uploadMedia,
   addReaction,
@@ -219,7 +220,6 @@ import {
 } from '../services/api.js'
 
 const route = useRoute()
-
 const chatId = ref(route.params.chatId)
 
 const title = ref('Conversation')
@@ -230,18 +230,21 @@ const error = ref('')
 const draft = ref('')
 const messageListEl = ref(null)
 
-/* conversation metadata (title/photo/type) */
-const conversation = ref(null)
+/**
+ * META: la risposta di GET /conversations/:id nel tuo backend
+ * NON include type/photo/name. Quindi prendiamo i meta da GET /conversations
+ */
+const conversationMeta = ref(null)
 
 const isGroup = computed(() => {
-  const c = conversation.value || {}
+  const c = conversationMeta.value || {}
   if (typeof c.isGroup === 'boolean') return c.isGroup
   if (c.type) return String(c.type).toLowerCase() === 'group'
   return false
 })
 
 const conversationPhoto = computed(() => {
-  const c = conversation.value || {}
+  const c = conversationMeta.value || {}
   return c.photoUrl || c.photo_url || c.photo || ''
 })
 
@@ -256,7 +259,7 @@ const uploadingGroupPhoto = ref(false)
 
 function openGroupPhotoPicker() {
   if (!groupPhotoInputEl.value) return
-  groupPhotoInputEl.value.value = '' // reset per poter scegliere lo stesso file
+  groupPhotoInputEl.value.value = ''
   groupPhotoInputEl.value.click()
 }
 
@@ -269,7 +272,6 @@ async function onGroupPhotoSelected(e) {
 
   try {
     await setGroupPhoto(Number(chatId.value), file)
-    // ricarica chat + (opzionale) fai sapere alla lista di refreshare
     await loadConversation()
     window.dispatchEvent(new Event('conversations-updated'))
   } catch (err) {
@@ -330,15 +332,27 @@ async function loadConversation({ silent = false } = {}) {
   error.value = ''
 
   try {
+    // 1) Messaggi
     const data = await getConversation(chatId.value)
-
-    conversation.value = data || null
     messages.value = Array.isArray(data) ? data : (data.messages || [])
 
-    if (data?.title || data?.name || data?.chatName) {
-      title.value = data.title || data.name || data.chatName
-    } else {
-      title.value = 'Conversation'
+    // 2) Meta dalla lista conversazioni
+    // (qui troviamo type/name/photoUrl)
+    try {
+      const list = await getMyConversations()
+      const arr = Array.isArray(list) ? list : (list.conversations || list.items || [])
+      const found = arr.find(c => String(c.id ?? c.chatId ?? c.conversationId) === String(chatId.value))
+      conversationMeta.value = found || null
+
+      // titolo: preferisci meta lista, poi fallback
+      const metaTitle = found?.name || found?.title || found?.chatName || ''
+      if (metaTitle) title.value = metaTitle
+      else if (data?.title || data?.name || data?.chatName) title.value = data.title || data.name || data.chatName
+      else title.value = 'Conversation'
+    } catch {
+      // se la lista conversazioni fallisce, non blocchiamo i messaggi
+      conversationMeta.value = null
+      title.value = data?.title || data?.name || data?.chatName || 'Conversation'
     }
 
     await nextTick()
@@ -364,7 +378,6 @@ async function handleSend() {
       kind: 'text',
       text
     })
-
     draft.value = ''
     await loadConversation()
   } catch (e) {
@@ -387,7 +400,6 @@ async function handleSendMedia() {
 
   try {
     const up = await uploadMedia(selectedFile.value)
-
     const mediaUrl = up?.url || up?.mediaUrl || up?.photoUrl || up?.path || up?.file || ''
     if (!mediaUrl) throw new Error('Upload ok but no media URL returned.')
 
@@ -488,7 +500,9 @@ watch(
 .conversation-page {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: calc(100vh - 56px);
+  min-width: 0;
 }
 
 .conv-header {
@@ -498,6 +512,7 @@ watch(
 
 .conv-main {
   flex: 1;
+  min-height: 0;
   padding: 0.75rem;
   overflow-y: auto;
   background: #f5f7fb;
