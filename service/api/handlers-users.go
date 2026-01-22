@@ -58,10 +58,18 @@ func (rt *_router) setMyUserName(
 	}
 
 	if err := rt.db.SetUserName(r.Context(), ctx.UserIdentifier, req.Username); err != nil {
-		ctx.Logger.WithError(err).Error("cannot update username")
-		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
-		return
+
+    // ✅ username già esistente → 409
+    if isUniqueUsernameError(err) {
+        writeJSON(w, http.StatusConflict, errorMsg("username already exists"))
+        return
+    }
+
+    ctx.Logger.WithError(err).Error("cannot update username")
+    writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
+    return
 	}
+
 
 	// 204 No Content
 	w.WriteHeader(http.StatusNoContent)
