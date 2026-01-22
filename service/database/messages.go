@@ -5,33 +5,39 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Message represents a message as defined in the OpenAPI schema.
 type Message struct {
-	ID                     int64   `json:"id"`
-	ChatID                 int64   `json:"chatId"`
-	SenderID               int64   `json:"senderId"`
-	SenderName             string  `json:"senderName"`
-	Kind                   string  `json:"kind"`
-	Text                   *string `json:"text,omitempty"`
-	MediaURL               *string `json:"mediaUrl,omitempty"`
-	ReplyToMessageID       *int64  `json:"replyToMessageId,omitempty"`
-	ForwardedFromMessageID *int64  `json:"forwardedFromMessageId,omitempty"`
-	Status                 string  `json:"status"`
-	CreatedAt              string  `json:"createdAt"`
-	Mine                   bool    `json:"mine"`
+	ID                     int64             `json:"id"`
+	ChatID                 int64             `json:"chatId"`
+	SenderID               int64             `json:"senderId"`
+	SenderName             string            `json:"senderName"`
+	Kind                   string            `json:"kind"`
+	Text                   *string           `json:"text,omitempty"`
+	MediaURL               *string           `json:"mediaUrl,omitempty"`
+	ReplyToMessageID       *int64            `json:"replyToMessageId,omitempty"`
+	ForwardedFromMessageID *int64            `json:"forwardedFromMessageId,omitempty"`
+	Status                 string            `json:"status"`
+	CreatedAt              string            `json:"createdAt"`
+	Mine                   bool              `json:"mine"`
+	Reactions              []ReactionSummary  `json:"reactions,omitempty"`
 }
 
-// Reaction represents a reaction to a message.
 type Reaction struct {
 	Emoji     string `json:"emoji"`
 	UserID    int64  `json:"userId"`
 	CreatedAt string `json:"createdAt"`
 }
 
-// initMessageTables creates the messages and message_reactions
-// tables if they do not already exist.
+// ✅ ReactionSummary: ciò che serve alla UI
+type ReactionSummary struct {
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+	Mine  bool   `json:"mine"`
+}
+
 func initMessageTables(db *sql.DB) error {
 	msgStmt := `
 	CREATE TABLE IF NOT EXISTS messages (
@@ -61,17 +67,12 @@ func initMessageTables(db *sql.DB) error {
 	if _, err := db.Exec(reactionsStmt); err != nil {
 		return fmt.Errorf("error creating message_reactions table: %w", err)
 	}
-
 	return nil
 }
 
-// getUserIDByIdentifier converts a user identifier (UUID string)
-// into the internal numeric user ID.
 func (db *appdbimpl) getUserIDByIdentifier(ctx context.Context, identifier string) (int64, error) {
 	var id int64
-	err := db.c.QueryRowContext(ctx, `
-		SELECT id FROM users WHERE identifier = ?
-	`, identifier).Scan(&id)
+	err := db.c.QueryRowContext(ctx, `SELECT id FROM users WHERE identifier = ?`, identifier).Scan(&id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, fmt.Errorf("user not found for identifier %q: %w", identifier, err)
@@ -85,7 +86,6 @@ func (db *appdbimpl) GetMessageByID(ctx context.Context, id int64) (Message, err
 	return db.getMessageByID(ctx, id)
 }
 
-// getMessageByID loads a single message by its ID.
 func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, error) {
 	var m Message
 	var text, mediaURL sql.NullString
@@ -131,7 +131,6 @@ func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, err
 	if senderName.Valid {
 		m.SenderName = senderName.String
 	}
-
 	if text.Valid {
 		s := text.String
 		m.Text = &s
@@ -149,10 +148,10 @@ func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, err
 		m.ForwardedFromMessageID = &v
 	}
 
+	// reactions NON le carichiamo qui (manca userID), le carichiamo nella list messages
 	return m, nil
 }
 
-// SendMessage creates a new message (POST /messages).
 func (db *appdbimpl) SendMessage(
 	ctx context.Context,
 	senderIdentifier string,
@@ -162,7 +161,6 @@ func (db *appdbimpl) SendMessage(
 	mediaURL *string,
 	replyToMessageID *int64,
 ) (Message, error) {
-
 	senderID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Message{}, err
@@ -199,21 +197,17 @@ func int64OrNil(v *int64) interface{} {
 	return *v
 }
 
-// ForwardMessage forwards an existing message into another chat.
 func (db *appdbimpl) ForwardMessage(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	toChatID int64,
 ) (Message, error) {
-
-	// 1. Load the original message.
 	orig, err := db.getMessageByID(ctx, messageID)
 	if err != nil {
 		return Message{}, err
 	}
 
-	// 2. Insert the forwarded message.
 	senderID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Message{}, err
@@ -244,20 +238,22 @@ func (db *appdbimpl) ForwardMessage(
 	return db.getMessageByID(ctx, newID)
 }
 
-// AddReaction registers a reaction on a message.
 func (db *appdbimpl) AddReaction(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	emoji string,
 ) (Reaction, error) {
-
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Reaction{}, err
 	}
 
-	// Insert or overwrite the reaction.
+	emoji = strings.TrimSpace(emoji)
+	if emoji == "" {
+		return Reaction{}, fmt.Errorf("empty emoji")
+	}
+
 	_, err = db.c.ExecContext(ctx, `
 		INSERT OR REPLACE INTO message_reactions (
 			message_id, user_id, emoji, created_at
@@ -276,18 +272,15 @@ func (db *appdbimpl) AddReaction(
 	if err != nil {
 		return Reaction{}, fmt.Errorf("cannot reload reaction: %w", err)
 	}
-
 	return r, nil
 }
 
-// RemoveReaction deletes a reaction from a message.
 func (db *appdbimpl) RemoveReaction(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 	emoji string,
 ) error {
-
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return err
@@ -305,17 +298,14 @@ func (db *appdbimpl) RemoveReaction(
 	if err == nil && affected == 0 {
 		return sql.ErrNoRows
 	}
-
 	return err
 }
 
-// DeleteMessage deletes a message sent by the authenticated user.
 func (db *appdbimpl) DeleteMessage(
 	ctx context.Context,
 	senderIdentifier string,
 	messageID int64,
 ) error {
-
 	userID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return err
@@ -333,11 +323,9 @@ func (db *appdbimpl) DeleteMessage(
 	if err == nil && affected == 0 {
 		return sql.ErrNoRows
 	}
-
 	return err
 }
 
-// textOrNil helps passing NULL to the DB when text/mediaURL are nil.
 func textOrNil(s *string) interface{} {
 	if s == nil {
 		return nil
