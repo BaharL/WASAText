@@ -81,6 +81,10 @@ func (db *appdbimpl) getUserIDByIdentifier(ctx context.Context, identifier strin
 	return id, nil
 }
 
+func (db *appdbimpl) GetMessageByID(ctx context.Context, id int64) (Message, error) {
+	return db.getMessageByID(ctx, id)
+}
+
 // getMessageByID loads a single message by its ID.
 func (db *appdbimpl) getMessageByID(ctx context.Context, id int64) (Message, error) {
 	var m Message
@@ -156,25 +160,25 @@ func (db *appdbimpl) SendMessage(
 	kind string,
 	text *string,
 	mediaURL *string,
+	replyToMessageID *int64,
 ) (Message, error) {
 
-	// 1. Retrieve the numeric user ID.
 	senderID, err := db.getUserIDByIdentifier(ctx, senderIdentifier)
 	if err != nil {
 		return Message{}, err
 	}
 
-	// 2. Insert the message.
 	res, err := db.c.ExecContext(ctx, `
 		INSERT INTO messages (
-			chat_id, sender_id, kind, text, media_url, status
-		) VALUES (?, ?, ?, ?, ?, 'sent')
+			chat_id, sender_id, kind, text, media_url, reply_to_message_id, status
+		) VALUES (?, ?, ?, ?, ?, ?, 'sent')
 	`,
 		chatID,
 		senderID,
 		kind,
 		textOrNil(text),
 		textOrNil(mediaURL),
+		int64OrNil(replyToMessageID),
 	)
 	if err != nil {
 		return Message{}, fmt.Errorf("cannot insert message: %w", err)
@@ -185,8 +189,14 @@ func (db *appdbimpl) SendMessage(
 		return Message{}, fmt.Errorf("cannot get last insert id: %w", err)
 	}
 
-	// 3. Reload and return the full message.
 	return db.getMessageByID(ctx, msgID)
+}
+
+func int64OrNil(v *int64) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 // ForwardMessage forwards an existing message into another chat.
