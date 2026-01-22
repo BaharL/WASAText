@@ -16,28 +16,34 @@ import (
 
 // uploadMedia gestisce POST /v1/media (AUTENTICATO)
 // Carica un file media (immagine/GIF/WebP) e ritorna un URL pubblico
-func (rt *_router) uploadMedia(w http.ResponseWriter, r *http.Request, _ httprouter.Params, ctx reqcontext.RequestContext) {
-	// 1) Auth: serve utente loggato
+func (rt *_router) uploadMedia(
+	w http.ResponseWriter,
+	r *http.Request,
+	_ httprouter.Params,
+	ctx reqcontext.RequestContext,
+) {
 	if ctx.UserIdentifier == "" {
 		writeErrorJSON(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	// 2) Parse multipart form (max 10MB)
+	// Limite hard: 10MB (utile per evitare body enormi)
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+
+	// Parse multipart form
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "File too large or invalid")
+		writeErrorJSON(w, http.StatusBadRequest, "File too large or invalid multipart form")
 		return
 	}
 
-	// 3) Ottieni il file
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeErrorJSON(w, http.StatusBadRequest, "Missing file")
+		writeErrorJSON(w, http.StatusBadRequest, "Missing file field")
 		return
 	}
 	defer file.Close()
 
-	// 4) Sniff content-type dai primi bytes (più affidabile del header)
+	// Sniff content-type
 	buf := make([]byte, 512)
 	n, _ := file.Read(buf)
 	detectedType := http.DetectContentType(buf[:n])
@@ -50,78 +56,47 @@ func (rt *_router) uploadMedia(w http.ResponseWriter, r *http.Request, _ httprou
 	// Rimetti i bytes letti davanti allo stream originale
 	reader := io.MultiReader(bytes.NewReader(buf[:n]), file)
 
-	// 5) Estensione coerente col tipo rilevato
+	// Estensione coerente
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext == "" {
 		ext = getExtensionFromContentType(detectedType)
 	}
+	if ext == "" {
+		ext = ".jpg"
+	}
 
-	// 6) Nome file unico
-	filename := fmt.Sprintf("media_%s_%d%s", ctx.UserIdentifier, time.Now().UnixNano(), ext)
-
-	// 7) Percorso dove salvare il file
+	// Crea directory
 	uploadDir := "./uploads/media"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		rt.baseLogger.WithError(err).Error("Failed to create upload directory")
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		ctx.Logger.WithError(err).Error("cannot create upload directory")
 		writeErrorJSON(w, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 
+	// Nome file unico
+	safeUser := strings.ReplaceAll(ctx.UserIdentifier, "/", "_")
+	filename := fmt.Sprintf("media_%s_%d%s", safeUser, time.Now().UnixNano(), ext)
 	filePath := filepath.Join(uploadDir, filename)
 
 	dst, err := os.Create(filePath)
 	if err != nil {
-		rt.baseLogger.WithError(err).Error("Failed to create file")
+		ctx.Logger.WithError(err).Error("cannot create destination file")
 		writeErrorJSON(w, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, reader); err != nil {
-		rt.baseLogger.WithError(err).Error("Failed to write file")
+		ctx.Logger.WithError(err).Error("cannot write file")
 		writeErrorJSON(w, http.StatusInternalServerError, "Failed to save file")
 		return
 	}
 
-	// 8) ✅ URL PUBBLICO: usa path relativo con /v1
-	// Così in DEV: browser fa /api + vite proxy => ok
-	// In PROD: nginx /api => ok
+	// URL pubblico servito da:
+	// rt.router.ServeFiles(base+"/uploads/*filepath", http.Dir("./uploads"))
 	publicURL := fmt.Sprintf("/v1/uploads/media/%s", filename)
 
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"url": publicURL,
 	})
-}
-
-// isValidMediaType controlla se il content type è valido per media messages
-func isValidMediaType(contentType string) bool {
-	validTypes := []string{
-		"image/jpeg",
-		"image/jpg",
-		"image/png",
-		"image/gif",
-		"image/webp",
-	}
-	for _, vt := range validTypes {
-		if strings.HasPrefix(contentType, vt) {
-			return true
-		}
-	}
-	return false
-}
-
-// getExtensionFromContentType ritorna l'estensione file dal content type
-func getExtensionFromContentType(contentType string) string {
-	switch {
-	case strings.Contains(contentType, "jpeg"), strings.Contains(contentType, "jpg"):
-		return ".jpg"
-	case strings.Contains(contentType, "png"):
-		return ".png"
-	case strings.Contains(contentType, "gif"):
-		return ".gif"
-	case strings.Contains(contentType, "webp"):
-		return ".webp"
-	default:
-		return ".jpg"
-	}
 }
