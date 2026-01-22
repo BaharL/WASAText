@@ -36,7 +36,10 @@ type AppDatabase interface {
 		kind string,
 		text *string,
 		mediaURL *string,
+		replyToMessageID *int64,
 	) (Message, error)
+
+	GetMessageByID(ctx context.Context, id int64) (Message, error)
 
 	ForwardMessage(
 		ctx context.Context,
