@@ -1,3 +1,7 @@
+package api
+
+import "strings"
+
 func isUniqueUsernameError(err error) bool {
     if err == nil {
         return false
