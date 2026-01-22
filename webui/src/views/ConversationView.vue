@@ -4,15 +4,8 @@
     <header class="conv-header d-flex align-items-center justify-content-between">
       <div class="d-flex align-items-center gap-2">
         <div class="conv-avatar">
-          <img
-            v-if="conversationPhoto"
-            :src="toImgSrc(conversationPhoto)"
-            alt="avatar"
-            class="conv-avatar-img"
-          >
-          <span v-else class="conv-avatar-fallback">
-            {{ conversationAvatarLabel }}
-          </span>
+          <img v-if="conversationPhoto" :src="toImgSrc(conversationPhoto)" alt="avatar" class="conv-avatar-img">
+          <span v-else class="conv-avatar-fallback">{{ conversationAvatarLabel }}</span>
         </div>
 
         <div>
@@ -42,12 +35,7 @@
           </button>
         </div>
 
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          :disabled="loading"
-          @click="loadConversation"
-        >
+        <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="loading" @click="loadConversation">
           <span v-if="loading">Reloading…</span>
           <span v-else>Reload</span>
         </button>
@@ -57,11 +45,8 @@
     <ErrorMsg v-if="error" :msg="error" />
 
     <LoadingSpinner :loading="loading">
-      <main class="conv-main" @click="closeActions">
-        <p
-          v-if="!loading && !error && messages.length === 0"
-          class="text-muted text-center mt-3"
-        >
+      <main ref="mainEl" class="conv-main" @click="closeActions">
+        <p v-if="!loading && !error && messages.length === 0" class="text-muted text-center mt-3">
           Nessun messaggio ancora. Inizia la conversazione! 💬
         </p>
 
@@ -71,30 +56,32 @@
             :key="m.id"
             class="message-row"
             :class="{ mine: isMine(m) }"
-            :data-mid="m.id"
+            :data-msgid="m.id"
           >
             <div class="bubble" @click.stop>
               <div class="bubble-meta">
-                <span class="author">
-                  {{ isMine(m) ? 'You' : (m.senderName || m.sender?.name || 'Other') }}
-                </span>
+                <span class="author">{{ isMine(m) ? 'You' : (m.senderName || m.sender?.name || 'Other') }}</span>
                 <span class="time">{{ formatTime(m.createdAt) }}</span>
               </div>
 
-              <!-- QUOTE / REPLY BOX -->
+              <!-- Forwarded label -->
+              <div v-if="m.forwardedFromMessageId" class="pill-forwarded">
+                Forwarded
+              </div>
+
+              <!-- ✅ Reply preview (WhatsApp style) -->
               <button
-                v-if="getReplyTarget(m)"
+                v-if="m.replyToMessageId"
                 type="button"
-                class="quoted"
-                @click="jumpToMessage(getReplyTarget(m).id)"
+                class="reply-preview"
+                @click="scrollToMessage(m.replyToMessageId)"
                 title="Go to replied message"
               >
-                <div class="quoted-author">
-                  {{ getReplyTarget(m).mine ? 'You' : (getReplyTarget(m).senderName || 'Other') }}
+                <div class="reply-line1">
+                  Reply to <span class="reply-author">{{ getReplyAuthor(m.replyToMessageId) }}</span>
                 </div>
-                <div class="quoted-text">
-                  <span v-if="getReplyTarget(m).text">{{ getReplyTarget(m).text }}</span>
-                  <span v-else>[{{ getReplyTarget(m).kind || 'media' }}]</span>
+                <div class="reply-line2">
+                  {{ getReplySnippet(m.replyToMessageId) }}
                 </div>
               </button>
 
@@ -117,114 +104,103 @@
                   class="btn btn-sm btn-light"
                   type="button"
                   title="Actions"
-                  @click.stop="toggleActions(m.id)"
+                  @click.stop="toggleActions(m.id, $event)"
                 >
                   ⋯
                 </button>
-
-                <!-- Popover: NON esce fuori (flip) -->
-                <div
-                  v-if="showActionsFor === m.id"
-                  class="actions-popover"
-                  :class="{ up: shouldPopoverGoUp(m.id) }"
-                  @click.stop
-                >
-                  <!-- Reply -->
-                  <button
-                    class="btn btn-sm btn-outline-secondary w-100 mb-2"
-                    type="button"
-                    @click="onReply(m)"
-                  >
-                    Reply
-                  </button>
-
-                  <!-- Reaction -->
-                  <div class="d-flex gap-2 align-items-center mb-2">
-                    <select v-model="reactionEmoji" class="form-select form-select-sm">
-                      <option>👍</option>
-                      <option>❤️</option>
-                      <option>😂</option>
-                      <option>😡</option>
-                      <option>🎉</option>
-                    </select>
-                    <button class="btn btn-sm btn-outline-primary" type="button" @click="onReact(m)">
-                      React
-                    </button>
-                  </div>
-
-                  <!-- Forward -->
-                  <div class="d-flex gap-2 align-items-center mb-2">
-                    <input
-                      v-model.trim="forwardToChatId"
-                      class="form-control form-control-sm"
-                      placeholder="Forward to chatId"
-                    >
-                    <button class="btn btn-sm btn-outline-secondary" type="button" @click="onForward(m)">
-                      Forward
-                    </button>
-                  </div>
-
-                  <!-- Delete -->
-                  <button
-                    v-if="isMine(m)"
-                    class="btn btn-sm btn-outline-danger w-100"
-                    type="button"
-                    @click="onDelete(m)"
-                  >
-                    Delete
-                  </button>
-                </div>
               </div>
             </div>
           </li>
         </ul>
+
+        <!-- ✅ Fixed popover that stays in viewport -->
+        <div
+          v-if="showActionsFor !== null"
+          class="actions-popover-fixed"
+          :style="{ top: popoverPos.top + 'px', left: popoverPos.left + 'px' }"
+          @click.stop
+        >
+          <button class="action-item" type="button" @click="onReply(getMessageById(showActionsFor))">
+            ↩ Reply
+          </button>
+
+          <div class="action-sep"></div>
+
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <select v-model="reactionEmoji" class="form-select form-select-sm">
+              <option>👍</option>
+              <option>❤️</option>
+              <option>😂</option>
+              <option>😡</option>
+              <option>🎉</option>
+            </select>
+            <button class="btn btn-sm btn-outline-primary" type="button" @click="onReact(getMessageById(showActionsFor))">
+              React
+            </button>
+          </div>
+
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <input
+              v-model.trim="forwardToChatId"
+              class="form-control form-control-sm"
+              placeholder="Forward to chatId"
+            >
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="onForward(getMessageById(showActionsFor))">
+              Forward
+            </button>
+          </div>
+
+          <button
+            v-if="isMine(getMessageById(showActionsFor))"
+            class="btn btn-sm btn-outline-danger w-100"
+            type="button"
+            @click="onDelete(getMessageById(showActionsFor))"
+          >
+            Delete
+          </button>
+        </div>
+
       </main>
     </LoadingSpinner>
 
-    <!-- Composer unico -->
+    <!-- ✅ Single unified input -->
     <footer class="conv-input">
-      <!-- Reply preview (WhatsApp-like) -->
-      <div v-if="replyTo" class="reply-preview">
-        <div class="reply-bar"></div>
-        <div class="reply-body">
-          <div class="reply-title">Reply to {{ replyTo.sender }}</div>
-          <div class="reply-snippet">
-            <span v-if="replyTo.text">{{ replyTo.text }}</span>
-            <span v-else>[{{ replyTo.kind || 'media' }}]</span>
-          </div>
+      <!-- Reply bar -->
+      <div v-if="replyingTo" class="reply-bar">
+        <div class="reply-bar-text">
+          Replying to <b>{{ replyingTo.senderName || (isMine(replyingTo) ? 'You' : 'Other') }}</b>:
+          <span class="text-muted">{{ snippet(replyingTo) }}</span>
         </div>
-        <button type="button" class="reply-close" @click="cancelReply" title="Cancel reply">×</button>
-      </div>
-
-      <!-- Media preview -->
-      <div v-if="selectedFile" class="media-preview">
-        <div class="media-name">
-          📎 {{ selectedFile.name }}
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" @click="clearSelectedFile">
-          Remove
-        </button>
+        <button type="button" class="btn btn-sm btn-light" @click="cancelReply" title="Cancel reply">✕</button>
       </div>
 
       <form class="input-row" @submit.prevent="handleSendUnified">
+        <!-- Attach -->
+        <input
+          ref="fileInputEl"
+          type="file"
+          accept="image/*"
+          class="d-none"
+          :disabled="sending"
+          @change="onFileSelected"
+        >
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          :disabled="sending"
+          @click="openFilePicker"
+          title="Attach image"
+        >
+          📎
+        </button>
+
         <input
           v-model="draft"
           type="text"
-          class="form-control"
+          class="form-control ms-2"
           placeholder="Scrivi un messaggio…"
           :disabled="sending"
         >
-
-        <label class="btn btn-outline-secondary ms-2 mb-0">
-          <input
-            type="file"
-            accept="image/*"
-            class="d-none"
-            :disabled="sending"
-            @change="onFileSelected"
-          >
-          📷
-        </label>
 
         <button
           type="submit"
@@ -236,9 +212,12 @@
         </button>
       </form>
 
-      <small class="text-muted d-block mt-1">
-        Enter = send · Shift+Enter = new line (solo se vuoi lo aggiungiamo)
-      </small>
+      <div v-if="selectedFile" class="attach-preview">
+        <span class="badge text-bg-light">
+          📷 {{ selectedFile.name }}
+        </span>
+        <button type="button" class="btn btn-sm btn-link" @click="clearSelectedFile">Remove</button>
+      </div>
     </footer>
   </div>
 </template>
@@ -269,39 +248,49 @@ const loading = ref(false)
 const sending = ref(false)
 const error = ref('')
 const draft = ref('')
-const messageListEl = ref(null)
 
-/* meta */
+const messageListEl = ref(null)
+const mainEl = ref(null)
+
+/**
+ * Meta from conversation list
+ */
 const conversationMeta = ref(null)
+
 const isGroup = computed(() => {
   const c = conversationMeta.value || {}
   if (typeof c.isGroup === 'boolean') return c.isGroup
   if (c.type) return String(c.type).toLowerCase() === 'group'
   return false
 })
+
 const conversationPhoto = computed(() => {
   const c = conversationMeta.value || {}
   return c.photoUrl || c.photo_url || c.photo || ''
 })
+
 const conversationAvatarLabel = computed(() => {
   const t = (title.value || '').trim()
   return t ? t.charAt(0).toUpperCase() : '?'
 })
 
-/* group photo */
+/* group photo upload */
 const groupPhotoInputEl = ref(null)
 const uploadingGroupPhoto = ref(false)
+
 function openGroupPhotoPicker() {
   if (!groupPhotoInputEl.value) return
   groupPhotoInputEl.value.value = ''
   groupPhotoInputEl.value.click()
 }
+
 async function onGroupPhotoSelected(e) {
   const file = e.target.files?.[0] || null
   if (!file) return
 
   uploadingGroupPhoto.value = true
   error.value = ''
+
   try {
     await setGroupPhoto(Number(chatId.value), file)
     await loadConversation()
@@ -314,57 +303,69 @@ async function onGroupPhotoSelected(e) {
   }
 }
 
-/* reply state */
-const replyTo = ref(null)
-function onReply(m) {
-  replyTo.value = {
-    id: m.id,
-    sender: isMine(m) ? 'You' : (m.senderName || m.sender?.name || 'Other'),
-    text: m.text || '',
-    kind: m.kind || '',
-    mediaUrl: m.mediaUrl || m.url || m.photoUrl || ''
-  }
-  showActionsFor.value = null
-}
-function cancelReply() {
-  replyTo.value = null
+/* unified media */
+const fileInputEl = ref(null)
+const selectedFile = ref(null)
+
+function openFilePicker() {
+  if (!fileInputEl.value) return
+  fileInputEl.value.value = ''
+  fileInputEl.value.click()
 }
 
-/* media */
-const selectedFile = ref(null)
 function onFileSelected(e) {
   selectedFile.value = e.target.files?.[0] || null
 }
+
 function clearSelectedFile() {
   selectedFile.value = null
 }
 
-/* actions */
+/* actions popover */
 const showActionsFor = ref(null)
 const forwardToChatId = ref('')
 const reactionEmoji = ref('👍')
 
-function toggleActions(messageId) {
-  showActionsFor.value = (showActionsFor.value === messageId) ? null : messageId
+const popoverPos = ref({ top: 0, left: 0 })
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n))
 }
+
+function toggleActions(messageId, ev) {
+  if (showActionsFor.value === messageId) {
+    showActionsFor.value = null
+    return
+  }
+
+  showActionsFor.value = messageId
+
+  // position popover inside viewport
+  const btn = ev?.currentTarget
+  if (btn) {
+    const rect = btn.getBoundingClientRect()
+    const w = 260
+    const h = 190
+    const margin = 8
+
+    const left = clamp(rect.right - w, margin, window.innerWidth - w - margin)
+    const top = clamp(rect.bottom + 6, margin, window.innerHeight - h - margin)
+
+    popoverPos.value = { top, left }
+  }
+}
+
 function closeActions() {
   showActionsFor.value = null
 }
 
-/* popover positioning: flip up if near bottom */
-function shouldPopoverGoUp(messageId) {
-  const container = document.querySelector('.conv-main')
-  if (!container) return false
-  const row = container.querySelector(`[data-mid="${messageId}"]`)
-  if (!row) return false
-
-  const rect = row.getBoundingClientRect()
-  const viewH = window.innerHeight
-  // se la parte bassa è troppo vicina al fondo, apri verso l'alto
-  return rect.bottom > (viewH - 260)
+function getMessageById(id) {
+  if (!id) return null
+  return messages.value.find(x => String(x.id) === String(id)) || null
 }
 
 function isMine(m) {
+  if (!m) return false
   return m.mine === true || m.direction === 'outgoing'
 }
 
@@ -387,37 +388,62 @@ function scrollToBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/* Reply link: find replied msg in current list */
-function getReplyId(m) {
-  return m.replyToMessageId ?? m.reply_to_message_id ?? null
-}
-function getReplyTarget(m) {
-  const id = getReplyId(m)
-  if (!id) return null
-  return messages.value.find(x => x.id === id) || null
+/* ✅ Reply helpers */
+const replyingTo = ref(null)
+
+function onReply(m) {
+  if (!m) return
+  replyingTo.value = m
+  closeActions()
 }
 
-/* Jump to replied message + highlight */
-const highlightId = ref(null)
-function jumpToMessage(messageId) {
-  const container = document.querySelector('.conv-main')
-  if (!container) return
-  const el = container.querySelector(`[data-mid="${messageId}"]`)
+function cancelReply() {
+  replyingTo.value = null
+}
+
+function snippet(m) {
+  if (!m) return ''
+  if (m.text) return String(m.text).slice(0, 80)
+  if (m.mediaUrl) return '[image]'
+  return `[${m.kind || 'message'}]`
+}
+
+function getReplySnippet(replyId) {
+  const m = getMessageById(replyId)
+  return m ? snippet(m) : '[message]'
+}
+
+function getReplyAuthor(replyId) {
+  const m = getMessageById(replyId)
+  if (!m) return 'unknown'
+  return isMine(m) ? 'You' : (m.senderName || 'Other')
+}
+
+async function scrollToMessage(messageId) {
+  closeActions()
+  await nextTick()
+
+  const el = mainEl.value
   if (!el) return
 
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  highlightId.value = messageId
-  setTimeout(() => {
-    if (highlightId.value === messageId) highlightId.value = null
-  }, 900)
+  // find li by data-msgid
+  const target = el.querySelector(`[data-msgid="${messageId}"]`)
+  if (!target) return
+
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // small highlight
+  target.classList.add('flash')
+  setTimeout(() => target.classList.remove('flash'), 700)
 }
 
-/* Load conversation */
+/* load conversation */
 async function loadConversation({ silent = false } = {}) {
   if (!chatId.value) {
     error.value = 'Chat non valida.'
     return
   }
+
   if (!silent) loading.value = true
   error.value = ''
 
@@ -450,7 +476,7 @@ async function loadConversation({ silent = false } = {}) {
   }
 }
 
-/* ✅ Composer unico: invia text oppure image con un solo tasto */
+/* ✅ unified send */
 async function handleSendUnified() {
   if (!chatId.value) return
   if (!draft.value.trim() && !selectedFile.value) return
@@ -459,46 +485,48 @@ async function handleSendUnified() {
   error.value = ''
 
   try {
-    let kind = 'text'
-    let text = draft.value.trim()
-    let mediaUrl = null
-
+    // if file attached -> upload then send image message
     if (selectedFile.value) {
-      // 1) upload file
       const up = await uploadMedia(selectedFile.value)
-      mediaUrl = up?.url || up?.mediaUrl || up?.photoUrl || up?.path || up?.file || ''
+      const mediaUrl = up?.url || up?.mediaUrl || up?.photoUrl || up?.path || up?.file || ''
       if (!mediaUrl) throw new Error('Upload ok but no media URL returned.')
-      kind = 'image'
-      // opzionale: se vuoi permettere anche testo + foto, NON svuotare text.
-      // per ora: se text esiste, lo mando comunque (dipende dal backend)
-      if (!text) text = null
+
+      await sendMessage({
+        chatId: Number(chatId.value),
+        kind: 'image',
+        mediaUrl,
+        replyToMessageId: replyingTo.value?.id ?? undefined
+      })
+
+      selectedFile.value = null
+      draft.value = ''
+      replyingTo.value = null
+      await loadConversation()
+      return
     }
 
-    // 2) send message
+    // text
     await sendMessage({
       chatId: Number(chatId.value),
-      kind,
-      text: kind === 'text' ? text : (text || null),
-      mediaUrl: mediaUrl || null,
-      replyToMessageId: replyTo.value?.id ?? null
+      kind: 'text',
+      text: draft.value.trim(),
+      replyToMessageId: replyingTo.value?.id ?? undefined
     })
 
-    // reset
     draft.value = ''
-    selectedFile.value = null
-    replyTo.value = null
-
+    replyingTo.value = null
     await loadConversation()
   } catch (e) {
     console.error(e)
-    error.value = e.message || 'Failed to send.'
+    error.value = e.message || 'Failed to send message.'
   } finally {
     sending.value = false
   }
 }
 
-/* reactions / forward / delete */
+/* actions handlers */
 async function onReact(m) {
+  if (!m) return
   try {
     await addReaction(m.id, reactionEmoji.value)
     await loadConversation()
@@ -506,11 +534,12 @@ async function onReact(m) {
     console.error(e)
     error.value = e.message || 'Failed to react.'
   } finally {
-    showActionsFor.value = null
+    closeActions()
   }
 }
 
 async function onForward(m) {
+  if (!m) return
   const toChatId = Number(forwardToChatId.value)
   if (!toChatId) return
 
@@ -521,14 +550,12 @@ async function onForward(m) {
     error.value = e.message || 'Failed to forward.'
   } finally {
     forwardToChatId.value = ''
-    showActionsFor.value = null
+    closeActions()
   }
 }
 
 async function onDelete(m) {
-  const ok = confirm('Delete this message?')
-  if (!ok) return
-
+  if (!m) return
   try {
     await deleteMessage(m.id)
     await loadConversation()
@@ -536,11 +563,11 @@ async function onDelete(m) {
     console.error(e)
     error.value = e.message || 'Failed to delete.'
   } finally {
-    showActionsFor.value = null
+    closeActions()
   }
 }
 
-/* Polling */
+/* polling */
 let pollTimer = null
 function startPolling() {
   stopPolling()
@@ -557,16 +584,30 @@ function stopPolling() {
   }
 }
 
+function onWindowResizeOrScroll() {
+  // close popover on resize/scroll to avoid weird positions
+  closeActions()
+}
+
 onMounted(async () => {
   await loadConversation()
   startPolling()
+  window.addEventListener('resize', onWindowResizeOrScroll)
+  window.addEventListener('scroll', onWindowResizeOrScroll, true)
 })
-onBeforeUnmount(() => stopPolling())
+
+onBeforeUnmount(() => {
+  stopPolling()
+  window.removeEventListener('resize', onWindowResizeOrScroll)
+  window.removeEventListener('scroll', onWindowResizeOrScroll, true)
+})
 
 watch(
   () => route.params.chatId,
   async (newId) => {
     chatId.value = newId
+    replyingTo.value = null
+    selectedFile.value = null
     await loadConversation()
     startPolling()
   }
@@ -585,7 +626,6 @@ watch(
 .conv-header {
   padding: 0.75rem 0.75rem 0.25rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  background: #fff;
 }
 
 .conv-main {
@@ -603,34 +643,36 @@ watch(
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
 }
 
 .message-row {
   display: flex;
   justify-content: flex-start;
 }
+
 .message-row.mine {
   justify-content: flex-end;
 }
 
 .bubble {
-  max-width: 72%;
-  padding: 0.55rem 0.65rem;
+  max-width: 70%;
+  padding: 0.5rem 0.65rem;
   border-radius: 14px;
   background: white;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.07);
-  font-size: 0.92rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  font-size: 0.9rem;
   position: relative;
 }
+
 .message-row.mine .bubble {
-  background: #d8f6e6;
+  background: #d1f5e2;
 }
 
 .bubble-meta {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
   font-size: 0.75rem;
   color: #6c757d;
 }
@@ -642,73 +684,81 @@ watch(
 
 .kind-pill {
   font-size: 0.8rem;
-  padding: 0.12rem 0.4rem;
+  padding: 0.1rem 0.35rem;
   border-radius: 999px;
   background: #e9ecef;
 }
 
 .msg-img {
-  max-width: 280px;
-  max-height: 280px;
+  max-width: 260px;
+  max-height: 260px;
   border-radius: 12px;
   display: block;
 }
 
-/* quoted */
-.quoted {
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: rgba(0,0,0,0.04);
-  border-radius: 12px;
-  padding: 0.45rem 0.55rem;
-  margin-bottom: 0.4rem;
-  cursor: pointer;
-}
-.quoted:hover { background: rgba(0,0,0,0.06); }
-.quoted-author {
-  font-weight: 700;
-  font-size: 0.78rem;
-  color: #0d6efd;
-  margin-bottom: 0.1rem;
-}
-.quoted-text {
-  font-size: 0.82rem;
-  color: #495057;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* actions */
 .bubble-actions {
-  position: relative;
   margin-top: 0.35rem;
   display: flex;
   justify-content: flex-end;
 }
 
-/* anchored popover */
-.actions-popover {
-  position: absolute;
-  right: 0;
-  top: 28px;
-  z-index: 50;
+/* ✅ fixed popover */
+.actions-popover-fixed {
+  position: fixed;
+  z-index: 9999;
   background: white;
   border: 1px solid rgba(0,0,0,0.12);
   border-radius: 12px;
-  padding: 0.55rem;
-  width: 240px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.14);
-}
-.actions-popover.up {
-  top: auto;
-  bottom: 28px;
+  padding: 0.5rem;
+  width: 260px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
 }
 
-/* input area */
+.action-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.action-item:hover {
+  background: rgba(0,0,0,0.05);
+}
+.action-sep {
+  height: 1px;
+  background: rgba(0,0,0,0.08);
+  margin: 0.35rem 0;
+}
+
+/* ✅ reply preview (WhatsApp-ish) */
+.reply-preview {
+  width: 100%;
+  border: 0;
+  background: rgba(0,0,0,0.04);
+  border-left: 4px solid rgba(13,110,253,0.8);
+  border-radius: 10px;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.35rem;
+  text-align: left;
+  cursor: pointer;
+}
+.reply-line1 { font-size: 0.75rem; color: #495057; }
+.reply-author { font-weight: 800; }
+.reply-line2 { font-size: 0.8rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* forwarded pill */
+.pill-forwarded {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6c757d;
+  margin-bottom: 0.25rem;
+}
+
+/* input */
 .conv-input {
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   background: #ffffff;
 }
@@ -718,66 +768,34 @@ watch(
   align-items: center;
 }
 
-/* Reply preview */
-.reply-preview {
+.attach-preview {
+  margin-top: 0.35rem;
   display: flex;
-  align-items: stretch;
-  gap: 0.6rem;
-  padding: 0.5rem 0.55rem;
-  border-radius: 12px;
-  background: rgba(13,110,253,0.07);
-  border: 1px solid rgba(13,110,253,0.15);
-  margin-bottom: 0.45rem;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+/* reply bar */
 .reply-bar {
-  width: 4px;
-  border-radius: 999px;
-  background: #0d6efd;
-  flex: 0 0 4px;
-}
-.reply-body { flex: 1; min-width: 0; }
-.reply-title {
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: #0d6efd;
-}
-.reply-snippet {
-  font-size: 0.82rem;
-  color: #495057;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.reply-close {
-  border: none;
-  background: transparent;
-  font-size: 1.2rem;
-  line-height: 1;
-  opacity: 0.6;
-}
-.reply-close:hover { opacity: 1; }
-
-/* media preview */
-.media-preview {
-  display:flex;
-  align-items:center;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.45rem 0.55rem;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.4rem;
+  background: rgba(13,110,253,0.08);
+  border: 1px solid rgba(13,110,253,0.18);
   border-radius: 12px;
-  background: rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.08);
-  margin-bottom: 0.45rem;
 }
-.media-name {
+.reply-bar-text {
   font-size: 0.85rem;
-  color: #495057;
+  color: #212529;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  padding-right: 0.5rem;
 }
 
-/* header avatar */
+/* Header avatar */
 .conv-avatar {
   width: 36px;
   height: 36px;
@@ -790,14 +808,13 @@ watch(
   background: #e9ecef;
   border: 1px solid rgba(0,0,0,0.06);
 }
-.conv-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.conv-avatar-fallback {
-  font-weight: 800;
-  font-size: 0.85rem;
-  color: #495057;
+.conv-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.conv-avatar-fallback { font-weight: 800; font-size: 0.85rem; color: #495057; }
+
+/* highlight when jump to reply */
+.message-row.flash .bubble,
+.flash .bubble {
+  outline: 2px solid rgba(13,110,253,0.35);
+  box-shadow: 0 0 0 6px rgba(13,110,253,0.12);
 }
 </style>
