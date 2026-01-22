@@ -405,7 +405,7 @@ async function handleSendMedia() {
 
     await sendMessage({
       chatId: Number(chatId.value),
-      kind: 'media',
+      kind: 'image',
       mediaUrl
     })
 
