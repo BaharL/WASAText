@@ -15,10 +15,11 @@ import (
 // Request models aligned with OpenAPI
 
 type sendMessageRequest struct {
-	ChatID   int64   `json:"chatId"`
-	Kind     string  `json:"kind"`
-	Text     *string `json:"text,omitempty"`
-	MediaURL *string `json:"mediaUrl,omitempty"`
+	ChatID           int64   `json:"chatId"`
+	Kind             string  `json:"kind"`
+	Text             *string `json:"text,omitempty"`
+	MediaURL         *string `json:"mediaUrl,omitempty"`
+	ReplyToMessageID *int64  `json:"replyToMessageId,omitempty"`
 }
 
 type forwardMessageRequest struct {
@@ -68,10 +69,36 @@ func (rt *_router) sendMessage(
 			return
 		}
 		req.MediaURL = nil
-	} else if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
-		writeJSON(w, http.StatusBadRequest, errorMsg("mediaUrl is required for gif/image messages"))
-		return
+	} else {
+		// gif/image
+		if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
+			writeJSON(w, http.StatusBadRequest, errorMsg("mediaUrl is required for gif/image messages"))
+			return
+		}
+		// niente testo obbligatorio qui
+	}
 
+	// ✅ Reply validation: if present, must exist and belong to the same chat
+	if req.ReplyToMessageID != nil {
+		if *req.ReplyToMessageID <= 0 {
+			writeJSON(w, http.StatusBadRequest, errorMsg("replyToMessageId must be positive"))
+			return
+		}
+
+		orig, err := rt.db.GetMessageByID(r.Context(), *req.ReplyToMessageID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusNotFound, errorMsg("reply target message not found"))
+				return
+			}
+			ctx.Logger.WithError(err).Error("cannot load reply target message")
+			writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
+			return
+		}
+		if orig.ChatID != req.ChatID {
+			writeJSON(w, http.StatusBadRequest, errorMsg("reply target must belong to the same chat"))
+			return
+		}
 	}
 
 	msg, err := rt.db.SendMessage(
@@ -81,6 +108,7 @@ func (rt *_router) sendMessage(
 		req.Kind,
 		req.Text,
 		req.MediaURL,
+		req.ReplyToMessageID, // ✅
 	)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("cannot send message")
