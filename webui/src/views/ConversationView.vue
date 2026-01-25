@@ -1,6 +1,6 @@
 <template>
   <div class="conversation-page">
-    <!-- HEADER (sticky, non sparisce con scroll) -->
+    <!-- HEADER (sticky) -->
     <header class="conv-header">
       <div class="header-left">
         <div class="chat-title">
@@ -10,6 +10,39 @@
       </div>
 
       <div class="header-right">
+        <!-- Group actions -->
+        <div v-if="isGroup" class="group-actions">
+          <label class="btn btn-sm btn-outline-primary mb-0" title="Change group photo">
+            <span v-if="changingGroupPhoto">Uploading…</span>
+            <span v-else>Change photo</span>
+            <input
+              type="file"
+              class="d-none"
+              accept="image/*"
+              @change="onPickGroupPhoto"
+              :disabled="changingGroupPhoto"
+            />
+          </label>
+
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            @click="openRename = !openRename"
+          >
+            Rename
+          </button>
+        </div>
+
+        <!-- TEMP toggle (così non rimani bloccata se backend non manda isGroup) -->
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          @click="isGroup = !isGroup"
+          title="Temporary toggle (remove later)"
+        >
+          Group tools
+        </button>
+
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
@@ -21,6 +54,26 @@
         </button>
       </div>
     </header>
+
+    <!-- RENAME GROUP (sticky-ish under header) -->
+    <div v-if="isGroup && openRename" class="rename-bar">
+      <input
+        v-model.trim="newGroupName"
+        class="form-control form-control-sm"
+        placeholder="New group name…"
+      />
+      <button
+        class="btn btn-sm btn-success"
+        :disabled="!newGroupName || renaming"
+        @click="onRenameGroup"
+      >
+        <span v-if="renaming">Saving…</span>
+        <span v-else>Save</span>
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" @click="openRename=false">
+        Cancel
+      </button>
+    </div>
 
     <!-- BODY (solo questo scrolla) -->
     <div class="conv-body">
@@ -111,7 +164,7 @@
 
               <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
 
-              <!-- ACTION MENU (pure Vue) -->
+              <!-- ACTION MENU -->
               <div
                 v-if="openMenuId === m.id"
                 class="msg-menu"
@@ -139,7 +192,7 @@
                 >{{ e }}</button>
               </div>
 
-              <!-- FORWARD POPOVER (by username) -->
+              <!-- FORWARD POPOVER -->
               <div
                 v-if="openForwardId === m.id"
                 class="forward-pop"
@@ -159,8 +212,9 @@
                     class="forward-user"
                     @click="doForwardToUser(m, u)"
                   >
-                    {{ u.name }}
+                    {{ u.username || u.name || u.identifier }}
                   </button>
+
                   <div v-if="forwardQuery && forwardResults.length === 0" class="text-muted small px-1 py-2">
                     No users found
                   </div>
@@ -168,20 +222,22 @@
               </div>
             </div>
 
-            <!-- anchor for scroll-to -->
+            <!-- anchor -->
             <div :id="`msg-${m.id}`"></div>
           </div>
         </div>
       </main>
     </div>
 
-    <!-- COMPOSER (sticky bottom, unificato: attach + input + send) -->
+    <!-- COMPOSER (sticky bottom) -->
     <footer class="composer" @click.stop>
       <!-- reply bar -->
       <div v-if="replyingTo" class="reply-bar">
         <div class="reply-bar-left">
           Replying to <strong>{{ replyingTo.senderName }}</strong>:
-          <span class="reply-bar-snippet">{{ replyingTo.text || (replyingTo.kind !== 'text' ? '[media]' : '') }}</span>
+          <span class="reply-bar-snippet">
+            {{ replyingTo.text || (replyingTo.kind !== 'text' ? '[media]' : '') }}
+          </span>
         </div>
         <button class="btn btn-sm btn-outline-secondary" @click="cancelReply">×</button>
       </div>
@@ -226,7 +282,9 @@ import {
   removeReaction,
   listUsers,
   createDirect,
-  forwardMessage
+  forwardMessage,
+  setGroupPhoto,
+  setGroupName
 } from '../services/api.js'
 
 const route = useRoute()
@@ -257,6 +315,12 @@ const emojiList = ['👍','❤️','😂','😮','😢','🔥','👏','🙏']
 
 const messagesEl = ref(null)
 
+const isGroup = ref(false)
+const openRename = ref(false)
+const newGroupName = ref('')
+const renaming = ref(false)
+const changingGroupPhoto = ref(false)
+
 function closeAllPopups() {
   openMenuId.value = null
   openReactId.value = null
@@ -286,7 +350,6 @@ function startReply(m) {
   replyingTo.value = m
   closeAllPopups()
   nextTick(() => {
-    // focus input
     const input = document.querySelector('.composer-row input.form-control')
     input?.focus()
   })
@@ -308,8 +371,6 @@ function onPickFile(ev) {
 
 function normalizeMediaUrl(u) {
   if (!u) return ''
-  // se backend ti manda già /v1/uploads/.. o URL assoluta, lascio.
-  // se ti manda /uploads/.., aggiungo /v1
   if (u.startsWith('http://') || u.startsWith('https://')) return u
   if (u.startsWith('/v1/')) return u
   if (u.startsWith('/uploads/')) return `/v1${u}`
@@ -318,16 +379,12 @@ function normalizeMediaUrl(u) {
 
 function formatTime(dt) {
   if (!dt) return ''
-  // dt è string tipo "2026-01-25 17:20:10"
-  // mostro hh:mm
   const m = String(dt).match(/(\d{2}):(\d{2})/)
   if (m) return `${m[1]}:${m[2]}`
   return dt
 }
 
-/* ------------------------------
- * LOAD conversation
- * ------------------------------ */
+/* LOAD conversation */
 async function loadConversation() {
   loading.value = true
   error.value = ''
@@ -336,14 +393,14 @@ async function loadConversation() {
   try {
     const data = await getConversation(chatId.value)
 
-    // data potrebbe essere: { id, title, messages } oppure solo array messaggi,
-    // dipende dal tuo backend. Gestisco entrambi.
     if (Array.isArray(data)) {
       messages.value = data
       title.value = `Conversation`
+      // isGroup non disponibile => rimane quello attuale
     } else {
       messages.value = data?.messages || data?.Messages || data?.data || []
       title.value = data?.title || data?.name || 'Conversation'
+      if (typeof data?.isGroup === 'boolean') isGroup.value = data.isGroup
     }
 
     await nextTick()
@@ -383,9 +440,7 @@ function repliedSnippet(id) {
   return '[media]'
 }
 
-/* ------------------------------
- * SEND message (text or media)
- * ------------------------------ */
+/* SEND message */
 async function onSend() {
   if (sending.value) return
   if (!draft.value && !pickedFile.value) return
@@ -399,13 +454,10 @@ async function onSend() {
     let text = null
 
     if (pickedFile.value) {
-      // upload media
       const up = await uploadMedia(pickedFile.value)
-      // up potrebbe essere { url } o { mediaUrl } ecc.
       mediaUrl = up?.mediaUrl || up?.url || up?.path || up
       if (!mediaUrl) throw new Error('Upload failed: no media url returned')
 
-      // kind
       const t = pickedFile.value.type || ''
       kind = t.startsWith('image/') ? 'image' : 'gif'
       text = draft.value ? draft.value : null
@@ -424,12 +476,10 @@ async function onSend() {
 
     await sendMessage(payload)
 
-    // reset
     draft.value = ''
     pickedFile.value = null
     replyingTo.value = null
 
-    // reload messages
     await loadConversation()
   } catch (e) {
     error.value = e.message || 'Cannot send message'
@@ -438,9 +488,7 @@ async function onSend() {
   }
 }
 
-/* ------------------------------
- * DELETE
- * ------------------------------ */
+/* DELETE */
 async function onDelete(m) {
   closeAllPopups()
   if (!m?.id) return
@@ -453,9 +501,7 @@ async function onDelete(m) {
   }
 }
 
-/* ------------------------------
- * REACTIONS
- * ------------------------------ */
+/* REACTIONS */
 async function onReact(m, emoji) {
   closeAllPopups()
   try {
@@ -476,13 +522,7 @@ async function toggleReaction(messageId, emoji, mine) {
   }
 }
 
-/* ------------------------------
- * FORWARD by username:
- * - search user
- * - create/open direct
- * - forward message into that chat
- * - navigate to that chat
- * ------------------------------ */
+/* FORWARD by username */
 let searchTimer = null
 function searchUsers() {
   clearTimeout(searchTimer)
@@ -494,7 +534,6 @@ function searchUsers() {
   searchTimer = setTimeout(async () => {
     try {
       const res = await listUsers(q)
-      // res potrebbe essere array o {users:[]}
       forwardResults.value = Array.isArray(res) ? res : (res?.users || [])
     } catch {
       forwardResults.value = []
@@ -505,27 +544,58 @@ function searchUsers() {
 async function doForwardToUser(m, user) {
   closeAllPopups()
   try {
-    // 1) create/open direct chat with that user identifier
     const direct = await createDirect(user.identifier)
     const newChatId = direct?.chatId || direct?.id || direct
-
     if (!newChatId) throw new Error('Cannot create/open direct chat')
 
-    // 2) forward into that chat
     await forwardMessage(m.id, Number(newChatId))
 
-    // 3) move to that chat
     await router.push(`/conversations/${newChatId}`)
-    // reload target chat
+    // ricarico dopo la navigation
     await loadConversation()
   } catch (e) {
     error.value = e.message || 'Cannot forward message'
   }
 }
 
-/* ------------------------------
- * CLOSE menus on outside click / ESC
- * ------------------------------ */
+/* GROUP: change photo */
+async function onPickGroupPhoto(ev) {
+  const f = ev.target.files?.[0]
+  if (!f) return
+  changingGroupPhoto.value = true
+  error.value = ''
+
+  try {
+    // IMPORTANT: api.js setGroupPhoto vuole FILE (FormData), non URL
+    await setGroupPhoto(chatId.value, f)
+    await loadConversation()
+  } catch (e) {
+    error.value = e.message || 'Cannot change group photo'
+  } finally {
+    changingGroupPhoto.value = false
+    ev.target.value = ''
+  }
+}
+
+/* GROUP: rename */
+async function onRenameGroup() {
+  if (!newGroupName.value) return
+  renaming.value = true
+  error.value = ''
+
+  try {
+    await setGroupName(chatId.value, newGroupName.value)
+    openRename.value = false
+    newGroupName.value = ''
+    await loadConversation()
+  } catch (e) {
+    error.value = e.message || 'Cannot rename group'
+  } finally {
+    renaming.value = false
+  }
+}
+
+/* CLOSE menus */
 function onKeyDown(e) {
   if (e.key === 'Escape') closeAllPopups()
 }
@@ -550,15 +620,13 @@ watch(() => chatId.value, async () => {
 </script>
 
 <style scoped>
-/* PAGE LAYOUT: header sticky, composer sticky, only messages scroll */
 .conversation-page{
-  height: calc(100vh - 60px); /* se hai navbar top fissa ~60px */
+  height: calc(100vh - 60px);
   display:flex;
   flex-direction:column;
   background:#f6f7f8;
 }
 
-/* header sticky */
 .conv-header{
   position: sticky;
   top: 0;
@@ -571,6 +639,27 @@ watch(() => chatId.value, async () => {
   justify-content:space-between;
 }
 
+.header-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.group-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.rename-bar{
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e6e6e6;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
 .conv-body{
   flex: 1;
   min-height: 0;
@@ -578,7 +667,6 @@ watch(() => chatId.value, async () => {
   flex-direction:column;
 }
 
-/* only this scrolls */
 .conv-main{
   flex: 1;
   min-height: 0;
@@ -586,7 +674,6 @@ watch(() => chatId.value, async () => {
   padding: 16px;
 }
 
-/* messages */
 .msg-row{
   display:flex;
   margin-bottom: 12px;
@@ -650,7 +737,6 @@ watch(() => chatId.value, async () => {
   display:block;
 }
 
-/* reactions */
 .reactions-row{
   display:flex;
   gap:6px;
@@ -675,7 +761,6 @@ watch(() => chatId.value, async () => {
   font-weight: 700;
 }
 
-/* meta & menus */
 .msg-meta{
   display:flex;
   align-items:center;
@@ -693,7 +778,7 @@ watch(() => chatId.value, async () => {
   cursor:pointer;
 }
 
-/* the key fix: menu must be ABOVE and not clipped */
+/* popovers above everything */
 .msg-menu{
   position: absolute;
   right: 8px;
@@ -722,7 +807,6 @@ watch(() => chatId.value, async () => {
   color:#b00020;
 }
 
-/* react popover */
 .react-pop{
   position:absolute;
   right: 8px;
@@ -751,7 +835,6 @@ watch(() => chatId.value, async () => {
   background:#f3f3f3;
 }
 
-/* forward popover */
 .forward-pop{
   position:absolute;
   right: 8px;
@@ -790,7 +873,6 @@ watch(() => chatId.value, async () => {
   background:#f3f3f3;
 }
 
-/* composer sticky bottom */
 .composer{
   position: sticky;
   bottom: 0;
