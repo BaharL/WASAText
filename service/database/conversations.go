@@ -114,7 +114,6 @@ func (db *appdbimpl) ListUserConversations(
 			if directOtherName.Valid && directOtherName.String != "" {
 				conv.Title = directOtherName.String
 			} else {
-				// fallback (non dovrebbe succedere se direct ha 2 membri)
 				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
 			}
 
@@ -199,7 +198,7 @@ func (db *appdbimpl) ListConversationMessages(
 	}
 	defer rows.Close()
 
-	var messages []Message
+	messages := make([]Message, 0)
 
 	for rows.Next() {
 		var m Message
@@ -244,7 +243,7 @@ func (db *appdbimpl) ListConversationMessages(
 			m.ForwardedFromMessageID = &v
 		}
 
-		// NEW: segno se è un messaggio dell'utente loggato
+		// segno se è un messaggio dell'utente loggato
 		m.Mine = (m.SenderID == userID)
 
 		messages = append(messages, m)
@@ -252,6 +251,23 @@ func (db *appdbimpl) ListConversationMessages(
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows conversation messages: %w", err)
+	}
+
+	// ✅ Carico tutte le reactions in 1 query e le attacco ai messaggi
+	ids := make([]int64, 0, len(messages))
+	for i := range messages {
+		ids = append(ids, messages[i].ID)
+	}
+
+	reactionMap, err := db.loadReactionSummaries(ctx, userID, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range messages {
+		if rs, ok := reactionMap[messages[i].ID]; ok {
+			messages[i].Reactions = rs
+		}
 	}
 
 	return messages, nil
