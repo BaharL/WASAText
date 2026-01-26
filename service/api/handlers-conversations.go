@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"string"
 
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"github.com/julienschmidt/httprouter"
@@ -33,16 +34,23 @@ func (rt *_router) listMyConversations(
 	convs, err := rt.db.ListUserConversations(r.Context(), ctx.UserIdentifier)
 	if err != nil {
 
-		// If user does not exist in DB, it is NOT an internal server error:
-		// it means the client has an old token (stale session).
+		// ✅ stale session: token valido ma user non esiste più
 		if errors.Is(err, sql.ErrNoRows) {
-			ctx.Logger.WithError(err).Warn("user not found while listing conversations (stale session)")
-			writeJSON(w, http.StatusUnauthorized, errorMsg("invalid or expired session"))
+			// qui però sql.ErrNoRows può anche essere "non membro / chat non esiste".
+			// Quindi distinguo con un check sul messaggio (pragmatico).
+			if strings.Contains(err.Error(), "user not found") {
+				ctx.Logger.WithError(err).Warn("user not found while listing conversation (stale session)")
+				writeJSON(w, http.StatusUnauthorized, errorMsg("invalid or expired session"))
+				return
+			}
+
+			// chat non esiste o non sei membro
+			ctx.Logger.WithError(err).Warn("chat not found or user not a member")
+			writeJSON(w, http.StatusNotFound, errorMsg("conversation not found"))
 			return
 		}
 
-		// Any other error is a real server-side problem.
-		ctx.Logger.WithError(err).Error("cannot list conversations")
+		ctx.Logger.WithError(err).Error("cannot list conversation messages")
 		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
