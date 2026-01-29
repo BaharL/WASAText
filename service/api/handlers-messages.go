@@ -69,13 +69,11 @@ func (rt *_router) sendMessage(
 			return
 		}
 		req.MediaURL = nil
-	} else {
-		// gif/image
-		if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
+	} else if req.MediaURL == nil || strings.TrimSpace(*req.MediaURL) == "" {
 			writeJSON(w, http.StatusBadRequest, errorMsg("mediaUrl is required for gif/image messages"))
 			return
-		}
 	}
+	
 
 	// Reply validation: if present, must exist and belong to the same chat
 	if req.ReplyToMessageID != nil {
