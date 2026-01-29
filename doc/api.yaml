@@ -84,6 +84,7 @@ paths:
                   value:
                     id: 223
                     username: "bahareh"
+                    photoUrl: "https://example.com/uploads/profile-223.jpg"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "409": { $ref: "#/components/responses/ConflictError" }
@@ -99,29 +100,21 @@ paths:
       parameters:
         - in: query
           name: search
+          description: Prefix/substring to filter usernames.
           schema:
             type: string
-            description: Search term for usernames
+            description: Search term for usernames.
             minLength: 1
             maxLength: 32
             pattern: "^[a-zA-Z0-9_-]+$"
             example: "mar"
-          description: Prefix/substring to filter usernames.
       responses:
         "200":
           description: Usernames list
           content:
             application/json:
               schema:
-                type: object
-                description: List of users matching the search criteria.
-                properties:
-                  users:
-                    type: array
-                    description: List of matching users.
-                    minItems: 0
-                    maxItems: 1000
-                    items: { $ref: "#/components/schemas/User" }
+                $ref: "#/components/schemas/UsersList"
               examples:
                 ok:
                   summary: Example list of users
@@ -129,8 +122,10 @@ paths:
                     users:
                       - id: 1
                         username: "mario"
+                        photoUrl: "https://example.com/uploads/profile-1.jpg"
                       - id: 2
                         username: "maria"
+                        photoUrl: "https://example.com/uploads/profile-2.jpg"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
   /users/photo:
@@ -145,46 +140,24 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              description: File payload for the new profile photo.
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Binary image file for the profile photo.
-                  minLength: 1
-                  maxLength: 10485760
+              $ref: "#/components/schemas/UploadFileRequest"
       responses:
         "200":
           description: Photo updated successfully
           content:
             application/json:
               schema:
-                type: object
-                description: Result of the photo update.
-                properties:
-                  message:
-                    type: string
-                    description: Confirmation message.
-                    example: "Photo updated"
-                  photoUrl:
-                    type: string
-                    format: url
-                    description: Public URL of the updated profile photo.
-                    maxLength: 2048
-                required:
-                  - message
+                $ref: "#/components/schemas/PhotoUpdateResponse"
               examples:
                 ok:
                   summary: Example photo update result
                   value:
                     message: "Photo updated"
-                    photoUrl: "https://example.com/uploads/profile-223.png"
+                    photoUrl: "https://example.com/uploads/profile-223.jpg"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
- 
+
   /conversations:
     get:
       tags: [conversations]
@@ -198,16 +171,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: List of conversations belonging to the user.
-                properties:
-                  conversations:
-                    type: array
-                    description: List of conversation summaries.
-                    minItems: 0
-                    maxItems: 1000
-                    items:
-                      $ref: "#/components/schemas/Conversation"
+                $ref: "#/components/schemas/ConversationsList"
               examples:
                 ok:
                   summary: Example conversations list
@@ -215,6 +179,7 @@ paths:
                     conversations:
                       - id: 134
                         title: "Chat 134"
+                        photoUrl: "https://example.com/uploads/chat-134.jpg"
                         lastMessage:
                           id: 501
                           chatId: 134
@@ -222,6 +187,7 @@ paths:
                           kind: "text"
                           text: "Ciao!"
                           status: "read"
+                          reactions: []
                           createdAt: "2025-11-18T18:00:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
@@ -240,16 +206,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                description: List of messages in the conversation.
-                properties:
-                  messages:
-                    type: array
-                    description: Messages of the conversation.
-                    minItems: 0
-                    maxItems: 500
-                    items:
-                      $ref: "#/components/schemas/Message"
+                $ref: "#/components/schemas/ConversationMessages"
               examples:
                 ok:
                   summary: Example conversation messages
@@ -261,6 +218,10 @@ paths:
                         kind: "text"
                         text: "Ciao!"
                         status: "read"
+                        reactions:
+                          - emoji: "❤️"
+                            userId: 223
+                            createdAt: "2025-11-18T19:10:00Z"
                         createdAt: "2025-11-18T18:00:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -283,7 +244,8 @@ paths:
           description: Message created
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Message" }
+              schema:
+                $ref: "#/components/schemas/Message"
               examples:
                 ok:
                   summary: Example created message
@@ -294,6 +256,7 @@ paths:
                     kind: "text"
                     text: "Hello from WASAText!"
                     status: "sent"
+                    reactions: []
                     createdAt: "2025-11-18T19:00:00Z"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
@@ -313,20 +276,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Target conversation for the forwarded message.
-              required: [toChatId]
-              properties:
-                toChatId:
-                  type: integer
-                  description: Identifier of the destination conversation.
-                  example: 987
+              $ref: "#/components/schemas/ForwardMessageRequest"
       responses:
         "201":
           description: Forward created
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Message" }
+              schema:
+                $ref: "#/components/schemas/Message"
               examples:
                 ok:
                   summary: Example forwarded message
@@ -338,6 +295,7 @@ paths:
                     text: "Ciao!"
                     forwardedFromMessageId: 501
                     status: "sent"
+                    reactions: []
                     createdAt: "2025-11-18T19:05:00Z"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -345,7 +303,7 @@ paths:
   /messages/{messageId}/reactions:
     post:
       tags: [messages]
-      summary: Add a reaction (comment) to a message
+      summary: Add a reaction to a message
       description: |
         Add an emoji reaction to an existing message.
       operationId: commentMessage
@@ -356,23 +314,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Emoji reaction to be added.
-              required: [emoji]
-              properties:
-                emoji:
-                  type: string
-                  description: Emoji character to use as a reaction.
-                  example: "👍"
-                  pattern: "^.{1,10}$"
-                  minLength: 1
-                  maxLength: 10
+              $ref: "#/components/schemas/AddReactionRequest"
       responses:
         "201":
           description: Reaction added
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Reaction" }
+              schema:
+                $ref: "#/components/schemas/Reaction"
               examples:
                 ok:
                   summary: Example reaction
@@ -386,7 +335,7 @@ paths:
   /messages/{messageId}/reactions/{emoji}:
     delete:
       tags: [messages]
-      summary: Remove a reaction (uncomment)
+      summary: Remove a reaction from a message
       description: |
         Remove a previously added emoji reaction from a message.
       operationId: uncommentMessage
@@ -397,10 +346,7 @@ paths:
           required: true
           description: Emoji reaction to remove from the message.
           schema:
-            type: string
-            pattern: "^.{1,10}$"
-            minLength: 1
-            maxLength: 10
+            $ref: "#/components/schemas/Emoji"
       responses:
         "204":
           description: Reaction removed
@@ -421,7 +367,6 @@ paths:
           description: Message deleted
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
-  
 
   /direct:
     post:
@@ -436,31 +381,23 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [members]
-              properties:
-                members:
-                  type: array
-                  minItems: 1
-                  maxItems: 1
-                  items:
-                    type: string
-                    format: uuid
+              $ref: "#/components/schemas/CreateDirectRequest"
       responses:
         "201":
           description: Direct chat created or returned
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  chatId:
-                    type: integer
-                required: [chatId]
+                $ref: "#/components/schemas/CreateDirectResponse"
+              examples:
+                ok:
+                  summary: Example direct response
+                  value:
+                    chatId: 123
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
-  
+
   /groups:
     post:
       tags: [groups]
@@ -473,43 +410,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Group details for creation.
-              required: [name]
-              properties:
-                name:
-                  type: string
-                  description: Name of the group.
-                  minLength: 1
-                  maxLength: 64
-                  pattern: "^[A-Za-z0-9 _'-]+$"
-                  example: "Amiche Roma"
-                members:
-                  type: array
-                  description: Identifiers of the initial members (UUIDs returned by /session).
-                  minItems: 0
-                  maxItems: 100
-                  items:
-                    type: string
-                    format: uuid
-                    description: User identifier
-                    pattern: "^[0-9a-fA-F-]{36}$"
-                    minLength: 36
-                    maxLength: 36
-                    example: "550e8400-e29b-41d4-a716-446655440000"
+              $ref: "#/components/schemas/CreateGroupRequest"
       responses:
         "201":
           description: Group created
           content:
             application/json:
               schema:
-                type: object
-                description: Identifier of the created group.
-                properties:
-                  chatId:
-                    type: integer
-                    description: Identifier of the created group conversation.
-                    example: 200
+                $ref: "#/components/schemas/CreateGroupResponse"
               examples:
                 ok:
                   summary: Example created group
@@ -518,7 +426,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
-  
+
   /groups/{chatId}/members:
     post:
       tags: [groups]
@@ -533,23 +441,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: Members to add to the group.
-              required: [members]
-              properties:
-                members:
-                  type: array
-                  description: Identifiers of the users to add (UUIDs returned by /session).
-                  minItems: 1
-                  maxItems: 100
-                  items:
-                    type: string
-                    format: uuid
-                    description: User identifier
-                    pattern: "^[0-9a-fA-F-]{36}$"
-                    minLength: 36
-                    maxLength: 36
-                    example: "550e8400-e29b-41d4-a716-446655440000"
+              $ref: "#/components/schemas/AddMembersRequest"
       responses:
         "204":
           description: Members added
@@ -572,7 +464,7 @@ paths:
           description: Left the group
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
-  
+
   /groups/{chatId}/name:
     put:
       tags: [groups]
@@ -587,36 +479,19 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              description: New name for the group.
-              required: [name]
-              properties:
-                name:
-                  type: string
-                  description: New group name.
-                  minLength: 1
-                  maxLength: 64
-                  pattern: "^[A-Za-z0-9 _'-]+$"
-                  example: "Amiche di Roma"
+              $ref: "#/components/schemas/SetGroupNameRequest"
       responses:
         "200":
           description: Group name updated
           content:
             application/json:
               schema:
-                type: object
-                description: Response confirming the group name update.
-                properties:
-                  message:
-                    type: string
-                    description: Confirmation message for the name update.
-                    example: "Group name updated"
+                $ref: "#/components/schemas/MessageResponse"
               examples:
                 ok:
                   summary: Example response
                   value:
                     message: "Group name updated"
-
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -624,46 +499,32 @@ paths:
 
   /groups/{chatId}/photo:
     put:
-      tags: [groups]
+      tags: [groups, media]
       summary: Set group photo
       description: |
-        Set or change the photo URL associated with a group conversation.
+        Upload or change the group photo of an existing group conversation.
       operationId: setGroupPhoto
       parameters:
         - $ref: "#/components/parameters/ChatID"
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              type: object
-              description: New photo URL for the group.
-              required: [photoUrl]
-              properties:
-                photoUrl:
-                  type: string
-                  format: url
-                  description: Public URL of the group photo.
-                  maxLength: 2048
-                  example: "https://example.com/group-photo.png"
+              $ref: "#/components/schemas/UploadFileRequest"
       responses:
         "200":
           description: Group photo updated
           content:
             application/json:
               schema:
-                type: object
-                description: Response confirming the group photo update.
-                properties:
-                  message:
-                    type: string
-                    description: Confirmation message for the photo update.
-                    example: "Group photo updated"
+                $ref: "#/components/schemas/PhotoUpdateResponse"
               examples:
                 ok:
                   summary: Example response
                   value:
                     message: "Group photo updated"
+                    photoUrl: "https://example.com/uploads/group-200.jpg"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
@@ -681,36 +542,18 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              description: Payload containing the media file to upload.
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Media file to upload.
-                  minLength: 1
-                  maxLength: 10485760
+              $ref: "#/components/schemas/UploadFileRequest"
       responses:
         "201":
           description: Media uploaded
           content:
             application/json:
               schema:
-                type: object
-                description: Result of the media upload.
-                properties:
-                  url:
-                    type: string
-                    format: url
-                    description: Public URL of the uploaded media file.
-                    minLength: 1
-                    maxLength: 2048
-                required: [url]
+                $ref: "#/components/schemas/UploadMediaResponse"
               examples:
                 ok:
                   summary: Example uploaded media response
-                  value: 
+                  value:
                     url: "https://example.com/uploads/media/media_123.png"
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
@@ -721,150 +564,272 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-  
+      bearerFormat: UUID
+
   parameters:
     ChatID:
       name: chatId
       in: path
       required: true
-      description: Conversation identifier
+      description: Conversation identifier.
       schema:
         type: integer
+        minimum: 1
         example: 134
-    
+
     MessageID:
       name: messageId
       in: path
       required: true
-      description: Message identifier
+      description: Message identifier.
       schema:
         type: integer
+        minimum: 1
         example: 501
 
   responses:
     BadRequestError:
-      description: Invalid request data
+      description: Invalid request data.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
     UnauthorizedError:
-      description: Invalid or missing bearer token
+      description: Invalid or missing bearer token.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
     NotFoundError:
-      description: Resource not found
+      description: Resource not found.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
     ConflictError:
-      description: Conflict with an existing resource
+      description: Conflict with an existing resource.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
     InternalServerError:
-      description: Unexpected server error
+      description: Unexpected server error.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
+
+  requestBodies:
+    ChangeUsername:
+      description: Request body to change the username.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ChangeUsernameRequest"
 
   schemas:
+    Identifier:
+      type: string
+      format: uuid
+      description: User identifier returned by /session, used as bearer token.
+      minLength: 36
+      maxLength: 36
+      pattern: '^[0-9a-fA-F-]{36}$'
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    Username:
+      type: string
+      description: Unique username.
+      minLength: 3
+      maxLength: 16
+      pattern: "^[a-zA-Z0-9_-]+$"
+      example: "mario"
+
+    ConversationTitle:
+      type: string
+      description: Display title of a conversation (group name or other user's name).
+      minLength: 1
+      maxLength: 64
+      example: "Amiche Roma"
+
+    MessageText:
+      type: string
+      description: Text content of a message.
+      minLength: 1
+      maxLength: 1000
+      pattern: "^.{1,1000}$"
+      example: "Ciao!"
+
+    Emoji:
+      type: string
+      description: Emoji used as reaction.
+      minLength: 1
+      maxLength: 10
+      pattern: "^.{1,10}$"
+      example: "👍"
+
+    Url:
+      type: string
+      format: url
+      description: Public URL.
+      minLength: 1
+      maxLength: 2048
+      example: "https://example.com/file.png"
+
+    MessageResponse:
+      type: object
+      description: Simple response containing a message.
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Human readable confirmation message.
+          minLength: 1
+          maxLength: 200
+          example: "OK"
+
+    UploadFileRequest:
+      type: object
+      description: Payload containing a file to upload.
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Binary file content.
+
+    UploadMediaResponse:
+      type: object
+      description: Result of the media upload.
+      required: [url]
+      properties:
+        url:
+          $ref: "#/components/schemas/Url"
+
+    PhotoUpdateResponse:
+      type: object
+      description: Result of a photo update operation.
+      required: [message, photoUrl]
+      properties:
+        message:
+          type: string
+          description: Confirmation message.
+          minLength: 1
+          maxLength: 200
+          example: "Photo updated"
+        photoUrl:
+          $ref: "#/components/schemas/Url"
+
+    Error:
+      type: object
+      description: Generic error response.
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Application error code.
+          minLength: 1
+          maxLength: 50
+          pattern: "^[A-Z_]+$"
+          example: "BAD_REQUEST"
+        message:
+          type: string
+          description: Human readable error message.
+          minLength: 1
+          maxLength: 500
+          example: "Invalid request data"
+
     User:
       type: object
-      description: Registered user
+      description: Registered user.
+      required: [id, username]
       properties:
         id:
           type: integer
-          description: User identifier
+          description: User identifier.
           example: 223
           readOnly: true
+          minimum: 1
         username:
-          type: string
-          description: Unique username
-          minLength: 3
-          maxLength: 16
-          pattern: "^[a-zA-Z0-9_-]+$"
-          example: "mario"
+          $ref: "#/components/schemas/Username"
         photoUrl:
-          type: string
-          format: url
+          allOf:
+            - $ref: "#/components/schemas/Url"
           description: Profile photo URL.
-          maxLength: 2048
 
-    
-    Conversation:
+    Reaction:
       type: object
-      description: Conversation summary
+      description: Reaction to a message.
+      required: [emoji, userId, createdAt]
       properties:
-        id:
+        emoji:
+          $ref: "#/components/schemas/Emoji"
+        userId:
           type: integer
-          description: Conversation identifier
-          example: 134
-        title:
+          description: User that reacted.
+          minimum: 1
+          example: 223
+        createdAt:
           type: string
-          description: Display title of the conversation
-          example: "Chat 134"
-        photoUrl:
-          type: string
-          format: url
-          description: Optional URL of the conversation or group photo.
-          maxLength: 2048
-        lastMessage:
-          $ref: "#/components/schemas/Message"
+          format: date-time
+          description: Reaction timestamp.
 
     Message:
       type: object
-      description: Message in a conversation
+      description: Message in a conversation.
+      required: [id, chatId, senderId, kind, status, reactions, createdAt]
       properties:
         id:
           type: integer
-          description: Message identifier
+          description: Message identifier.
+          minimum: 1
           example: 501
         chatId:
           type: integer
-          description: Conversation identifier
+          description: Conversation identifier.
+          minimum: 1
           example: 134
         senderId:
           type: integer
-          description: Sender user identifier
+          description: Sender user identifier.
+          minimum: 1
           example: 223
         kind:
           type: string
-          description: Kind of message
+          description: Kind of message.
           enum: [text, gif, image]
           example: "text"
         text:
-          type: string
-          description: Text content of the message (if kind is text).
-          example: "Ciao!"
+          allOf:
+            - $ref: "#/components/schemas/MessageText"
+          description: Text content of the message (only if kind is text).
         mediaUrl:
-          type: string
-          format: url
+          allOf:
+            - $ref: "#/components/schemas/Url"
           description: URL of the media attached to the message, if any.
         replyToMessageId:
           type: integer
           description: If this message is a reply, ID of the original message.
+          minimum: 1
+          nullable: true
         forwardedFromMessageId:
           type: integer
           description: If this message is forwarded, ID of the original message.
+          minimum: 1
+          nullable: true
         status:
           type: string
-          description: Delivery status
+          description: Delivery status.
           enum: [sent, received, read]
           example: "read"
         reactions:
           type: array
-          description: Reactions applied to this message
+          description: Reactions applied to this message.
           minItems: 0
           maxItems: 50
           items:
@@ -872,106 +837,213 @@ components:
         createdAt:
           type: string
           format: date-time
-          description: Creation timestamp
+          description: Creation timestamp.
 
-    Reaction:
+    Conversation:
       type: object
-      description: Reaction to a message
+      description: Conversation summary.
+      required: [id, title]
       properties:
-        emoji:
-          type: string
-          description: Emoji representing the reaction
-          example: "❤️"
-        userId:
+        id:
           type: integer
-          description: User that reacted
-          example: 223
-        createdAt:
-          type: string
-          format: date-time
-          description: Reaction timestamp
+          description: Conversation identifier.
+          minimum: 1
+          example: 134
+        title:
+          $ref: "#/components/schemas/ConversationTitle"
+        photoUrl:
+          allOf:
+            - $ref: "#/components/schemas/Url"
+          description: Optional URL of the conversation or group photo.
+        lastMessage:
+          allOf:
+            - $ref: "#/components/schemas/Message"
+          description: Last message in the conversation (if any).
+          nullable: true
 
-    Error:
+    ConversationsList:
       type: object
-      description: Generic error response
+      description: List of conversations belonging to the user.
+      required: [conversations]
       properties:
-        code:
-          type: string
-          description: Application error code
-          example: "BAD_REQUEST"
-        message:
-          type: string
-          description: Human readable error message
-          example: "Invalid request data"
-      required:
-        - code
-        - message
+        conversations:
+          type: array
+          description: List of conversation summaries.
+          minItems: 0
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/Conversation"
+
+    ConversationMessages:
+      type: object
+      description: List of messages in the conversation.
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          description: Messages of the conversation.
+          minItems: 0
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Message"
+
+    UsersList:
+      type: object
+      description: List of users matching the search criteria.
+      required: [users]
+      properties:
+        users:
+          type: array
+          description: List of matching users.
+          minItems: 0
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/User"
+
+    ChangeUsernameRequest:
+      type: object
+      description: Request body to change the username.
+      required: [username]
+      properties:
+        username:
+          $ref: "#/components/schemas/Username"
 
     SendMessageRequest:
       type: object
-      description: Request body to send a message
+      description: Request body to send a message.
       required: [chatId, kind]
       properties:
         chatId:
           type: integer
-          description: Conversation identifier
+          description: Conversation identifier.
+          minimum: 1
           example: 134
         kind:
           type: string
-          description: Kind of message
+          description: Kind of message.
           enum: [text, gif, image]
           example: "text"
         text:
-          type: string
+          allOf:
+            - $ref: "#/components/schemas/MessageText"
           description: Text to send for text messages.
-          pattern: "^.{1,1000}$"
-          minLength: 1
-          maxLength: 1000
-          example: "Ciao!"
         mediaUrl:
-          type: string
-          format: url
+          allOf:
+            - $ref: "#/components/schemas/Url"
           description: URL of the media to send, if any.
-          maxLength: 2048
 
-    LoginRequest:
+    ForwardMessageRequest:
       type: object
-      description: Login request body
+      description: Target conversation for the forwarded message.
+      required: [toChatId]
+      properties:
+        toChatId:
+          type: integer
+          description: Identifier of the destination conversation.
+          minimum: 1
+          example: 987
+
+    AddReactionRequest:
+      type: object
+      description: Emoji reaction to be added.
+      required: [emoji]
+      properties:
+        emoji:
+          $ref: "#/components/schemas/Emoji"
+
+    CreateDirectRequest:
+      type: object
+      description: Request body to create or get a direct conversation.
+      required: [members]
+      properties:
+        members:
+          type: array
+          description: Identifier of the target user (UUID from /session). Exactly one member.
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: "#/components/schemas/Identifier"
+
+    CreateDirectResponse:
+      type: object
+      description: Response containing the chatId of the direct conversation.
+      required: [chatId]
+      properties:
+        chatId:
+          type: integer
+          description: Identifier of the direct conversation.
+          minimum: 1
+          example: 123
+
+    CreateGroupRequest:
+      type: object
+      description: Group details for creation.
       required: [name]
       properties:
         name:
           type: string
-          description: Name of the user
-          minLength: 3
-          maxLength: 16
-          pattern: "^[a-zA-Z0-9_]+$"
-          example: "Maria"
+          description: Name of the group.
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9 _'-]+$"
+          example: "Amiche Roma"
+        members:
+          type: array
+          description: Identifiers of the initial members (UUIDs returned by /session).
+          minItems: 0
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Identifier"
+
+    CreateGroupResponse:
+      type: object
+      description: Identifier of the created group.
+      required: [chatId]
+      properties:
+        chatId:
+          type: integer
+          description: Identifier of the created group conversation.
+          minimum: 1
+          example: 200
+
+    AddMembersRequest:
+      type: object
+      description: Members to add to the group.
+      required: [members]
+      properties:
+        members:
+          type: array
+          description: Identifiers of the users to add (UUIDs returned by /session).
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Identifier"
+
+    SetGroupNameRequest:
+      type: object
+      description: New name for the group.
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: New group name.
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9 _'-]+$"
+          example: "Amiche di Roma"
+
+    LoginRequest:
+      type: object
+      description: Login request body.
+      required: [name]
+      properties:
+        name:
+          $ref: "#/components/schemas/Username"
 
     LoginResponse:
       type: object
-      description: Login response body
+      description: Login response body.
+      required: [identifier]
       properties:
         identifier:
-          type: string
-          format: uuid
-          description: Identifier for the logged-in user
-          example: "550e8400-e29b-41d4-a716-446655440000"
-
-  requestBodies:
-    ChangeUsername:
-      description: Request body to change the username
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            description: New username
-            required: [username]
-            properties:
-              username:
-                type: string
-                description: New username to be set
-                minLength: 3
-                maxLength: 16
-                pattern: "^[a-zA-Z0-9_-]+$"
-                example: "mario"
+          $ref: "#/components/schemas/Identifier"
