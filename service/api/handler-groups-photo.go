@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	defaultImageExt       = ".jpg"
 	groupsUploadDir       = "./uploads/groups"
 	groupsUploadURLPrefix = "/v1/uploads/groups/"
 )
