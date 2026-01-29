@@ -203,6 +203,19 @@ paths:
                 ok:
                   summary: Example conversation messages
                   value:
+                    id: 134
+                    title: "Chat 134"
+                    isGroup: false
+                    photoUrl: "https://example.com/uploads/chat-134.jpg"
+                    lastMessage:
+                      id: 501
+                      chatId: 134
+                      senderId: 223
+                      kind: "text"
+                      text: "Ciao!"
+                      status: "read"
+                      reactions: []
+                      createdAt: "2025-11-18T18:00:00Z"
                     messages:
                       - id: 501
                         chatId: 134
@@ -210,11 +223,9 @@ paths:
                         kind: "text"
                         text: "Ciao!"
                         status: "read"
-                        reactions:
-                          - emoji: "❤️"
-                            userId: 223
-                            createdAt: "2025-11-18T19:10:00Z"
+                        reactions: []
                         createdAt: "2025-11-18T18:00:00Z"
+
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "404": { $ref: "#/components/responses/NotFoundError" }
 
@@ -834,7 +845,7 @@ components:
     ConversationMessages:
       type: object
       description: Canonical schema containing conversation info and (optionally) its messages.
-      required: [id, title, isGroup, message]
+      required: [id, title, isGroup, messages]
       properties:
         id:
           type: integer
