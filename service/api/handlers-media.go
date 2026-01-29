@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	defaultImageExt = ".jpg"
 	mediaUploadDir  = "./uploads/media"
 	mediaURLPrefix  = "/v1/uploads/media/"
 )
