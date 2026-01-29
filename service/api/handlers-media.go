@@ -14,6 +14,12 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+const (
+	defaultImageExt = ".jpg"
+	mediaUploadDir  = "./uploads/media"
+	mediaURLPrefix  = "/v1/uploads/media/"
+)
+
 // uploadMedia gestisce POST /v1/media (AUTENTICATO)
 // Carica un file media (immagine/GIF/WebP) e ritorna un URL pubblico
 func (rt *_router) uploadMedia(
@@ -62,12 +68,11 @@ func (rt *_router) uploadMedia(
 		ext = getExtensionFromContentType(detectedType)
 	}
 	if ext == "" {
-		ext = ".jpg"
+		ext = defaultImageExt
 	}
 
 	// Crea directory
-	uploadDir := "./uploads/media"
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+	if err := os.MkdirAll(mediaUploadDir, 0o755); err != nil {
 		ctx.Logger.WithError(err).Error("cannot create upload directory")
 		writeErrorJSON(w, http.StatusInternalServerError, "Failed to save file")
 		return
@@ -76,7 +81,7 @@ func (rt *_router) uploadMedia(
 	// Nome file unico
 	safeUser := strings.ReplaceAll(ctx.UserIdentifier, "/", "_")
 	filename := fmt.Sprintf("media_%s_%d%s", safeUser, time.Now().UnixNano(), ext)
-	filePath := filepath.Join(uploadDir, filename)
+	filePath := filepath.Join(mediaUploadDir, filename)
 
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -92,9 +97,7 @@ func (rt *_router) uploadMedia(
 		return
 	}
 
-	// URL pubblico servito da:
-	// rt.router.ServeFiles(base+"/uploads/*filepath", http.Dir("./uploads"))
-	publicURL := fmt.Sprintf("/v1/uploads/media/%s", filename)
+	publicURL := mediaURLPrefix + filename
 
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"url": publicURL,
