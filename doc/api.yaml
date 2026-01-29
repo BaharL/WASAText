@@ -829,7 +829,7 @@ components:
           type: string
           format: date-time
           description: Creation timestamp.
-        ConversationMessages:
+    ConversationMessages:
       type: object
       description: Canonical schema containing conversation info and its messages.
       required: [messages]
@@ -856,7 +856,7 @@ components:
           maxItems: 500
           items:
             $ref: "#/components/schemas/Message"
-
+    
     ConversationMessagesSummary:
       allOf:
         - $ref: "#/components/schemas/ConversationMessages"
