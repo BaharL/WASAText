@@ -75,10 +75,9 @@ func (rt *_router) sendMessage(
 			writeJSON(w, http.StatusBadRequest, errorMsg("mediaUrl is required for gif/image messages"))
 			return
 		}
-		// niente testo obbligatorio qui
 	}
 
-	// ✅ Reply validation: if present, must exist and belong to the same chat
+	// Reply validation: if present, must exist and belong to the same chat
 	if req.ReplyToMessageID != nil {
 		if *req.ReplyToMessageID <= 0 {
 			writeJSON(w, http.StatusBadRequest, errorMsg("replyToMessageId must be positive"))
@@ -108,7 +107,7 @@ func (rt *_router) sendMessage(
 		req.Kind,
 		req.Text,
 		req.MediaURL,
-		req.ReplyToMessageID, // ✅
+		req.ReplyToMessageID,
 	)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("cannot send message")
