@@ -1,4 +1,3 @@
-// service/api/handler-groups.go
 package api
 
 import (
