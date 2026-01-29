@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	mediaUploadDir  = "./uploads/media"
-	mediaURLPrefix  = "/v1/uploads/media/"
+	mediaUploadDir = "./uploads/media"
+	mediaURLPrefix = "/v1/uploads/media/"
 )
 
 // uploadMedia gestisce POST /v1/media (AUTENTICATO)
