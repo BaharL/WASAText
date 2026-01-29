@@ -166,7 +166,7 @@ func (rt *_router) setMyPhoto(
 		ext = strings.ToLower(filepath.Ext(header.Filename))
 	}
 	if ext == "" {
-		ext = ".jpg"
+		ext = defaultImageExt
 	}
 
 	// Crea cartella uploads/profiles
