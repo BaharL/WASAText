@@ -829,11 +829,10 @@ components:
           type: string
           format: date-time
           description: Creation timestamp.
-
-    ConversationMessagesSummary:
+        ConversationMessages:
       type: object
-      description: Conversation summary.
-      required: [id, title]
+      description: Canonical schema containing conversation info and its messages.
+      required: [messages]
       properties:
         id:
           type: integer
@@ -850,6 +849,24 @@ components:
           allOf:
             - $ref: "#/components/schemas/Message"
           description: Last message in the conversation (if any).
+        messages:
+          type: array
+          description: Messages of the conversation ordered from oldest to newest.
+          minItems: 0
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/Message"
+
+    ConversationMessagesSummary:
+      allOf:
+        - $ref: "#/components/schemas/ConversationMessages"
+        - type: object
+          description: Conversation summary (variant of ConversationMessages without the messages list).
+          properties:
+            messages:
+              description: Not included in summary responses.
+              readOnly: true
+              deprecated: true
 
     ConversationMessagesCollection:
       type: object
@@ -863,19 +880,6 @@ components:
           maxItems: 1000
           items:
             $ref: "#/components/schemas/ConversationMessagesSummary"
-
-    ConversationMessages:
-      type: object
-      description: List of messages in the conversation.
-      required: [messages]
-      properties:
-        messages:
-          type: array
-          description: Messages of the conversation.
-          minItems: 0
-          maxItems: 500
-          items:
-            $ref: "#/components/schemas/Message"
 
     UsersList:
       type: object
