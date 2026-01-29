@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -42,7 +43,7 @@ func (db *appdbimpl) GetOrCreateDirectChat(
 	if err == nil {
 		return existingID, nil
 	}
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, fmt.Errorf("cannot lookup direct chat: %w", err)
 	}
 
