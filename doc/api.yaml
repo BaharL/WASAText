@@ -179,6 +179,7 @@ paths:
                     conversations:
                       - id: 134
                         title: "Chat 134"
+                        isGroup: false
                         photoUrl: "https://example.com/uploads/chat-134.jpg"
         "401": { $ref: "#/components/responses/UnauthorizedError" }
 
@@ -833,6 +834,7 @@ components:
     ConversationMessages:
       type: object
       description: Canonical schema containing conversation info and (optionally) its messages.
+      required: [id, title, isGroup, message]
       properties:
         id:
           type: integer
@@ -841,6 +843,10 @@ components:
           example: 134
         title:
           $ref: "#/components/schemas/ConversationTitle"
+        isGroup:
+          type: boolean
+          description: True if this conversation is a group chat, false if it is chat.
+          example: true
         photoUrl:
           allOf:
             - $ref: "#/components/schemas/Url"
@@ -860,6 +866,7 @@ components:
     ConversationMessagesSummary:
       type: object
       description: Conversation summary (subset of ConversationMessages).
+      required: [id, title, isGroup]
       properties:
         id:
           type: integer
@@ -868,6 +875,9 @@ components:
           example: 134
         title:
           $ref: "#/components/schemas/ConversationTitle"
+        isGroup:
+          type: boolean
+          description: True if this conversation is a group chat, false if it is a direct chat.
         photoUrl:
           allOf:
             - $ref: "#/components/schemas/Url"
