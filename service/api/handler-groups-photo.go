@@ -13,6 +13,12 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+const (
+	defaultImageExt      = ".jpg"
+	groupsUploadDir      = "./uploads/groups"
+	groupsUploadURLPrefix = "/v1/uploads/groups/"
+)
+
 func (rt *_router) setGroupPhoto(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -65,17 +71,17 @@ func (rt *_router) setGroupPhoto(
 		ext = strings.ToLower(filepath.Ext(header.Filename))
 	}
 	if ext == "" {
-		ext = ".jpg"
+		ext = defaultImageExt
 	}
 
 	// Ensure folder
-	if err := os.MkdirAll("./uploads/groups", 0o755); err != nil {
+	if err := os.MkdirAll(groupsUploadDir, 0o755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorMsg("cannot create groups directory"))
 		return
 	}
 
 	filename := fmt.Sprintf("group-%d%s", chatID, ext)
-	dstPath := filepath.Join("./uploads/groups", filename)
+	dstPath := filepath.Join(groupsUploadDir, filename)
 
 	dst, err := os.Create(dstPath)
 	if err != nil {
@@ -90,7 +96,7 @@ func (rt *_router) setGroupPhoto(
 	}
 
 	// Served by ServeFiles: /v1/uploads/...
-	photoURL := "/v1/uploads/groups/" + filename
+	photoURL := groupsUploadURLPrefix + filename
 
 	if err := rt.db.SetGroupPhoto(r.Context(), ctx.UserIdentifier, chatID, photoURL); err != nil {
 		ctx.Logger.WithError(err).Error("cannot persist group photo url")
