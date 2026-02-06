@@ -19,9 +19,9 @@
               type="file"
               class="d-none"
               accept="image/*"
-              @change="onPickGroupPhoto"
               :disabled="changingGroupPhoto"
-            />
+              @change="onPickGroupPhoto"
+            >
           </label>
 
           <button
@@ -37,8 +37,8 @@
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
-          @click="isGroup = !isGroup"
           title="Temporary toggle (remove later)"
+          @click="isGroup = !isGroup"
         >
           Group tools
         </button>
@@ -61,7 +61,7 @@
         v-model.trim="newGroupName"
         class="form-control form-control-sm"
         placeholder="New group name…"
-      />
+      >
       <button
         class="btn btn-sm btn-success"
         :disabled="!newGroupName || renaming"
@@ -99,8 +99,8 @@
             <div
               v-if="m.replyToMessageId"
               class="reply-preview"
-              @click.stop="scrollToMessage(m.replyToMessageId)"
               title="Go to replied message"
+              @click.stop="scrollToMessage(m.replyToMessageId)"
             >
               <div class="reply-title">
                 Reply to <strong>{{ repliedSender(m.replyToMessageId) }}</strong>
@@ -122,7 +122,7 @@
                   class="media-img"
                   :src="normalizeMediaUrl(m.mediaUrl)"
                   alt="image"
-                />
+                >
                 <video
                   v-else-if="m.kind === 'gif'"
                   class="media-img"
@@ -148,8 +148,8 @@
                 :key="r.emoji"
                 class="reaction-chip"
                 :class="{ mine: r.mine }"
-                @click.stop="toggleReaction(m.id, r.emoji, r.mine)"
                 title="Toggle reaction"
+                @click.stop="toggleReaction(m.id, r.emoji, r.mine)"
               >
                 <span class="emoji">{{ r.emoji }}</span>
                 <span class="count">{{ r.count }}</span>
@@ -189,7 +189,9 @@
                   :key="e"
                   class="emoji-btn"
                   @click="onReact(m, e)"
-                >{{ e }}</button>
+                >
+                  {{ e }}
+                </button>
               </div>
 
               <!-- FORWARD POPOVER -->
@@ -204,7 +206,7 @@
                   class="form-control form-control-sm"
                   placeholder="Type username…"
                   @input="searchUsers"
-                />
+                >
                 <div class="forward-results">
                   <button
                     v-for="u in forwardResults"
@@ -223,7 +225,7 @@
             </div>
 
             <!-- anchor -->
-            <div :id="`msg-${m.id}`"></div>
+            <div :id="`msg-${m.id}`" />
           </div>
         </div>
       </main>
@@ -245,7 +247,7 @@
       <div class="composer-row">
         <label class="attach-btn" title="Attach media">
           📎
-          <input type="file" class="d-none" accept="image/*,video/*" @change="onPickFile" />
+          <input type="file" class="d-none" accept="image/*,video/*" @change="onPickFile">
         </label>
 
         <input
@@ -253,7 +255,7 @@
           class="form-control"
           placeholder="Write a message…"
           @keydown.enter.prevent="onSend"
-        />
+        >
 
         <button class="btn btn-success" :disabled="sending || (!draft && !pickedFile)" @click="onSend">
           <span v-if="sending">Sending…</span>

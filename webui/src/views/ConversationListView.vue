@@ -12,8 +12,8 @@
           type="button"
           class="btn btn-sm btn-outline-secondary"
           :disabled="loading"
-          @click="loadConversations"
           title="Refresh"
+          @click="loadConversations"
         >
           ↻
         </button>
@@ -112,8 +112,8 @@
             type="button"
             class="chip"
             :disabled="creating"
-            @click="removeSelected(u)"
             title="Remove"
+            @click="removeSelected(u)"
           >
             {{ u.username || u.name || 'user' }}
             <span class="chip-x">×</span>
