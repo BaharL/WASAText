@@ -5,7 +5,14 @@
       <div class="header-left">
         <div class="chat-title">
           <h1 class="h5 mb-0">{{ title }}</h1>
-          <small class="text-muted">Chat ID: {{ chatId }}</small>
+          <small class="text-muted">
+            {{ m.mine ? 'You' : m.senderName }} · {{ formatTime(m.createdAt) }}
+            <span v-if="m.mine" class="ms-1">
+              <span v-if="m.status === 'sent'">✓</span>
+              <span v-else-if="m.status === 'received'">✓✓</span>
+              <span v-else-if="m.status === 'read'">✓✓</span>
+            </span>
+          </small>
         </div>
       </div>
 
