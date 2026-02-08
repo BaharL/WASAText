@@ -5,9 +5,7 @@
       <div class="header-left">
         <div class="chat-title">
           <h1 class="h5 mb-0">{{ title }}</h1>
-          <small class="text-muted">
-            Chat ID: {{ chatId }}
-          </small>
+          <small class="text-muted">Chat ID: {{ chatId }}</small>
         </div>
       </div>
 
@@ -35,7 +33,7 @@
           </button>
         </div>
 
-        <!-- TEMP toggle -->
+        <!-- TEMP toggle (remove later) -->
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
@@ -79,31 +77,26 @@
 
     <!-- BODY -->
     <div class="conv-body">
-      <!-- ERROR -->
       <div v-if="error" class="alert alert-danger mx-3 mt-3">
         {{ error }}
       </div>
 
-      <!-- MESSAGES -->
       <main ref="messagesEl" class="conv-main" @click="closeAllPopups">
         <p v-if="!loading && !error && messages.length === 0" class="text-muted mx-3 mt-3">
           No messages yet.
         </p>
 
-        <div v-for="m in messages" :key="m.id" class="msg-row" :class="{ mine: !!m.mine }">
-          <div
-            class="msg-bubble"
-            :class="{
-              mine: !!m.mine,
-              raised: (openReactId === m.id) || (openMenuId === m.id) || (openForwardId === m.id)
-            }"
-          >
-            <!-- forwarded pill -->
+        <div
+          v-for="m in messages"
+          :key="m.id"
+          class="msg-row"
+          :class="{ mine: !!m.mine, 'row-open': isAnyPopupOpen(m.id) }"
+        >
+          <div class="msg-bubble" :class="{ mine: !!m.mine }">
             <div v-if="m.forwardedFromMessageId" class="pill">
               Forwarded
             </div>
 
-            <!-- reply preview -->
             <div
               v-if="m.replyToMessageId"
               class="reply-preview"
@@ -164,27 +157,24 @@
               </button>
             </div>
 
-            <!-- meta + 3 dots -->
+            <!-- meta + ticks + dots -->
             <div class="msg-meta">
-              <small class="text-muted meta-left">
-                <span>{{ m.mine ? 'You' : m.senderName }}</span>
-                <span> · {{ formatTime(m.createdAt) }}</span>
-
-                <!-- ✅ TICKS (ONLY for my messages): sent -> ✓ | received/read -> ✓✓ -->
-                <span v-if="m.mine" class="ticks ms-2">
-                  <span v-if="m.status === 'sent'">✓</span>
-                  <span v-else>✓✓</span>
-                </span>
+              <small class="text-muted">
+                {{ m.mine ? 'You' : (m.senderName || 'unknown') }} · {{ formatTime(m.createdAt) }}
               </small>
 
-              <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
+              <div class="meta-right">
+                <!-- Delivery ticks for outgoing messages only -->
+                <span v-if="m.mine" class="ticks" :title="m.status || ''">
+                  <span v-if="tickCount(m) === 1">✓</span>
+                  <span v-else-if="tickCount(m) === 2">✓✓</span>
+                </span>
+
+                <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
+              </div>
 
               <!-- ACTION MENU -->
-              <div
-                v-if="openMenuId === m.id"
-                class="msg-menu"
-                @click.stop
-              >
+              <div v-if="openMenuId === m.id" class="msg-menu" @click.stop>
                 <button class="menu-item" @click="startReply(m)">Reply</button>
                 <button class="menu-item" @click="openForward(m)">Forward</button>
                 <button class="menu-item" @click="openReact(m)">React</button>
@@ -194,11 +184,7 @@
               </div>
 
               <!-- REACT POPOVER -->
-              <div
-                v-if="openReactId === m.id"
-                class="react-pop"
-                @click.stop
-              >
+              <div v-if="openReactId === m.id" class="react-pop" @click.stop>
                 <button
                   v-for="e in emojiList"
                   :key="e"
@@ -210,11 +196,7 @@
               </div>
 
               <!-- FORWARD POPOVER -->
-              <div
-                v-if="openForwardId === m.id"
-                class="forward-pop"
-                @click.stop
-              >
+              <div v-if="openForwardId === m.id" class="forward-pop" @click.stop>
                 <div class="forward-title">Forward to (username)</div>
                 <input
                   v-model.trim="forwardQuery"
@@ -239,7 +221,6 @@
               </div>
             </div>
 
-            <!-- anchor -->
             <div :id="`msg-${m.id}`" />
           </div>
         </div>
@@ -248,7 +229,6 @@
 
     <!-- COMPOSER -->
     <footer class="composer" @click.stop>
-      <!-- reply bar -->
       <div v-if="replyingTo" class="reply-bar">
         <div class="reply-bar-left">
           Replying to <strong>{{ replyingTo.senderName }}</strong>:
@@ -301,7 +281,9 @@ import {
   createDirect,
   forwardMessage,
   setGroupPhoto,
-  setGroupName
+  setGroupName,
+  markConversationReceived,
+  markConversationRead
 } from '../services/api.js'
 
 const route = useRoute()
@@ -344,6 +326,19 @@ function closeAllPopups() {
   openForwardId.value = null
 }
 
+function isAnyPopupOpen(messageId) {
+  return openMenuId.value === messageId || openReactId.value === messageId || openForwardId.value === messageId
+}
+
+// Returns 1 tick for "sent", 2 ticks for "received" or "read".
+function tickCount(m) {
+  const s = String(m?.status || '').toLowerCase()
+  if (s === 'sent' || s === '') return 1
+  if (s === 'received' || s === 'read') return 2
+  // Fallback: unknown statuses still show 1 tick.
+  return 1
+}
+
 function toggleMenu(id) {
   const next = (openMenuId.value === id) ? null : id
   openMenuId.value = next
@@ -354,11 +349,13 @@ function toggleMenu(id) {
 function openReact(m) {
   openReactId.value = m.id
   openForwardId.value = null
+  openMenuId.value = null
 }
 
 function openForward(m) {
   openForwardId.value = m.id
   openReactId.value = null
+  openMenuId.value = null
   forwardQuery.value = ''
   forwardResults.value = []
 }
@@ -401,6 +398,12 @@ function formatTime(dt) {
   return dt
 }
 
+async function markIncomingAsReceivedAndRead() {
+  // Best-effort: do not block UI if backend does not support these endpoints yet.
+  try { await markConversationReceived(chatId.value) } catch {}
+  try { await markConversationRead(chatId.value) } catch {}
+}
+
 /* LOAD conversation */
 async function loadConversation() {
   loading.value = true
@@ -412,7 +415,7 @@ async function loadConversation() {
 
     if (Array.isArray(data)) {
       messages.value = data
-      title.value = `Conversation`
+      title.value = 'Conversation'
     } else {
       messages.value = data?.messages || data?.Messages || data?.data || []
       title.value = data?.title || data?.name || 'Conversation'
@@ -421,6 +424,9 @@ async function loadConversation() {
 
     await nextTick()
     scrollToBottom()
+
+    // Update delivery/read status for incoming messages (best-effort).
+    await markIncomingAsReceivedAndRead()
   } catch (e) {
     error.value = e.message || 'Cannot load conversation'
   } finally {
@@ -508,7 +514,6 @@ async function onSend() {
 async function onDelete(m) {
   closeAllPopups()
   if (!m?.id) return
-
   try {
     await deleteMessage(m.id)
     await loadConversation()
@@ -691,9 +696,16 @@ watch(() => chatId.value, async () => {
 .msg-row{
   display:flex;
   margin-bottom: 12px;
+  position: relative;
+  z-index: 1;
 }
 .msg-row.mine{
   justify-content:flex-end;
+}
+
+/* When a popup is open, bring this row on top */
+.msg-row.row-open{
+  z-index: 99999;
 }
 
 .msg-bubble{
@@ -703,16 +715,12 @@ watch(() => chatId.value, async () => {
   border-radius: 12px;
   padding: 10px 10px 6px;
   position: relative;
+  overflow: visible; /* Important: allow popovers to overflow */
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .msg-bubble.mine{
   background: #dff6df;
   border-color: #cfeccc;
-}
-
-/* ✅ when any popup is open, lift this bubble above others */
-.msg-bubble.raised{
-  z-index: 5000;
 }
 
 .pill{
@@ -735,20 +743,8 @@ watch(() => chatId.value, async () => {
   cursor: pointer;
   margin-bottom: 8px;
 }
-.reply-title{
-  font-size: 12px;
-  color:#2f5f8c;
-}
-.reply-snippet{
-  font-size: 12px;
-  color:#2a2a2a;
-  opacity: 0.85;
-  margin-top: 2px;
-}
 
-.media-wrap{
-  margin-top: 4px;
-}
+.media-wrap{ margin-top: 4px; }
 .media-img{
   max-width: 320px;
   width: 100%;
@@ -762,6 +758,7 @@ watch(() => chatId.value, async () => {
   flex-wrap: wrap;
   margin-top: 8px;
 }
+
 .reaction-chip{
   border: 1px solid #ddd;
   background: white;
@@ -773,12 +770,6 @@ watch(() => chatId.value, async () => {
   align-items:center;
   cursor:pointer;
 }
-.reaction-chip.mine{
-  border-color:#2b6b2b;
-}
-.reaction-chip .count{
-  font-weight: 700;
-}
 
 .msg-meta{
   display:flex;
@@ -788,14 +779,16 @@ watch(() => chatId.value, async () => {
   margin-top: 8px;
 }
 
-.meta-left{
-  display:inline-flex;
+.meta-right{
+  display:flex;
   align-items:center;
+  gap: 8px;
 }
 
 .ticks{
-  font-weight: 800;
   font-size: 12px;
+  line-height: 1;
+  user-select:none;
 }
 
 .dots-btn{
@@ -807,19 +800,25 @@ watch(() => chatId.value, async () => {
   cursor:pointer;
 }
 
-/* popovers above everything */
-.msg-menu{
+/* Menus / popovers must be above everything */
+.msg-menu,
+.react-pop,
+.forward-pop{
   position: absolute;
   right: 8px;
   top: 34px;
-  z-index: 9999;
+  z-index: 100000;
   background: white;
   border: 1px solid #ddd;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.msg-menu{
   border-radius: 10px;
   min-width: 140px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
   overflow: hidden;
 }
+
 .menu-item{
   width: 100%;
   text-align: left;
@@ -829,29 +828,20 @@ watch(() => chatId.value, async () => {
   cursor: pointer;
   font-size: 14px;
 }
-.menu-item:hover{
-  background:#f3f3f3;
-}
-.menu-item.danger{
-  color:#b00020;
-}
+
+.menu-item:hover{ background:#f3f3f3; }
+.menu-item.danger{ color:#b00020; }
 
 .react-pop{
-  position:absolute;
-  right: 8px;
-  top: 34px;
   transform: translateY(44px);
-  z-index: 9999;
-  background:white;
-  border:1px solid #ddd;
   border-radius: 12px;
   padding: 8px;
   display:flex;
   gap:6px;
   flex-wrap: wrap;
   width: 210px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
+
 .emoji-btn{
   border: 1px solid #ddd;
   background:white;
@@ -860,28 +850,20 @@ watch(() => chatId.value, async () => {
   cursor:pointer;
   font-size: 16px;
 }
-.emoji-btn:hover{
-  background:#f3f3f3;
-}
 
 .forward-pop{
-  position:absolute;
-  right: 8px;
-  top: 34px;
   transform: translateY(44px);
-  z-index: 9999;
-  background:white;
-  border:1px solid #ddd;
   border-radius: 12px;
   padding: 10px;
   width: 240px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
+
 .forward-title{
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 6px;
 }
+
 .forward-results{
   margin-top: 8px;
   max-height: 160px;
@@ -890,6 +872,7 @@ watch(() => chatId.value, async () => {
   flex-direction:column;
   gap:6px;
 }
+
 .forward-user{
   border: 1px solid #e3e3e3;
   background:white;
@@ -897,9 +880,6 @@ watch(() => chatId.value, async () => {
   padding: 6px 8px;
   text-align:left;
   cursor:pointer;
-}
-.forward-user:hover{
-  background:#f3f3f3;
 }
 
 .composer{
@@ -921,10 +901,6 @@ watch(() => chatId.value, async () => {
   border-radius: 12px;
   padding: 8px 10px;
   margin-bottom: 8px;
-}
-.reply-bar-snippet{
-  opacity: 0.8;
-  margin-left: 6px;
 }
 
 .composer-row{
