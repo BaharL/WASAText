@@ -72,6 +72,10 @@ type AppDatabase interface {
 	ListUserConversations(ctx context.Context, userIdentifier string) ([]ConversationSummary, error)
 	ListConversationMessages(ctx context.Context, userIdentifier string, conversationID int64) ([]Message, error)
 
+	// Message delivery/read status updates.
+	MarkConversationReceived(ctx context.Context, userIdentifier string, conversationID int64) error
+	MarkConversationRead(ctx context.Context, userIdentifier string, conversationID int64) error
+
 	// Direct chats
 	GetOrCreateDirectChat(ctx context.Context, requesterIdentifier string, otherIdentifier string) (int64, error)
 
