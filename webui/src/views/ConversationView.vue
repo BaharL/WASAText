@@ -10,7 +10,6 @@
       </div>
 
       <div class="header-right">
-        <!-- Group actions -->
         <div v-if="isGroup" class="group-actions">
           <label class="btn btn-sm btn-outline-primary mb-0" title="Change group photo">
             <span v-if="changingGroupPhoto">Uploading…</span>
@@ -33,7 +32,6 @@
           </button>
         </div>
 
-        <!-- TEMP toggle (remove later) -->
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
@@ -55,7 +53,6 @@
       </div>
     </header>
 
-    <!-- RENAME GROUP -->
     <div v-if="isGroup && openRename" class="rename-bar">
       <input
         v-model.trim="newGroupName"
@@ -75,7 +72,6 @@
       </button>
     </div>
 
-    <!-- BODY -->
     <div class="conv-body">
       <div v-if="error" class="alert alert-danger mx-3 mt-3">
         {{ error }}
@@ -90,12 +86,10 @@
           v-for="m in messages"
           :key="m.id"
           class="msg-row"
-          :class="{ mine: !!m.mine, 'row-open': isAnyPopupOpen(m.id) }"
+          :class="{ mine: !!m.mine, 'row-open': openMenuId===m.id || openForwardId===m.id }"
         >
           <div class="msg-bubble" :class="{ mine: !!m.mine }">
-            <div v-if="m.forwardedFromMessageId" class="pill">
-              Forwarded
-            </div>
+            <div v-if="m.forwardedFromMessageId" class="pill">Forwarded</div>
 
             <div
               v-if="m.replyToMessageId"
@@ -111,7 +105,6 @@
               </div>
             </div>
 
-            <!-- content -->
             <div class="msg-content">
               <div v-if="m.kind === 'text'">
                 {{ m.text }}
@@ -142,7 +135,6 @@
               </div>
             </div>
 
-            <!-- reactions row -->
             <div v-if="m.reactions && m.reactions.length" class="reactions-row">
               <button
                 v-for="r in m.reactions"
@@ -157,45 +149,27 @@
               </button>
             </div>
 
-            <!-- meta + ticks + dots -->
             <div class="msg-meta">
               <small class="text-muted">
-                {{ m.mine ? 'You' : (m.senderName || 'unknown') }} · {{ formatTime(m.createdAt) }}
+                {{ m.mine ? 'You' : m.senderName }} · {{ formatTime(m.createdAt) }}
+                <span v-if="m.mine" class="ms-1 tick">
+                  <span v-if="m.status === 'sent'">✓</span>
+                  <span v-else-if="m.status === 'received'">✓✓</span>
+                  <span v-else-if="m.status === 'read'">✓✓</span>
+                </span>
               </small>
 
-              <div class="meta-right">
-                <!-- Delivery ticks for outgoing messages only -->
-                <span v-if="m.mine" class="ticks" :title="m.status || ''">
-                  <span v-if="tickCount(m) === 1">✓</span>
-                  <span v-else-if="tickCount(m) === 2">✓✓</span>
-                </span>
+              <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
 
-                <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
-              </div>
-
-              <!-- ACTION MENU -->
               <div v-if="openMenuId === m.id" class="msg-menu" @click.stop>
                 <button class="menu-item" @click="startReply(m)">Reply</button>
                 <button class="menu-item" @click="openForward(m)">Forward</button>
-                <button class="menu-item" @click="openReact(m)">React</button>
+                <button class="menu-item" @click="openReact(m, $event)">React</button>
                 <button v-if="m.mine" class="menu-item danger" @click="onDelete(m)">
                   Delete
                 </button>
               </div>
 
-              <!-- REACT POPOVER -->
-              <div v-if="openReactId === m.id" class="react-pop" @click.stop>
-                <button
-                  v-for="e in emojiList"
-                  :key="e"
-                  class="emoji-btn"
-                  @click="onReact(m, e)"
-                >
-                  {{ e }}
-                </button>
-              </div>
-
-              <!-- FORWARD POPOVER -->
               <div v-if="openForwardId === m.id" class="forward-pop" @click.stop>
                 <div class="forward-title">Forward to (username)</div>
                 <input
@@ -227,7 +201,6 @@
       </main>
     </div>
 
-    <!-- COMPOSER -->
     <footer class="composer" @click.stop>
       <div v-if="replyingTo" class="reply-bar">
         <div class="reply-bar-left">
@@ -263,6 +236,23 @@
         <button class="btn btn-sm btn-outline-secondary" @click="clearPickedFile">Remove</button>
       </div>
     </footer>
+
+    <!-- Fixed-position reaction popover (always on top) -->
+    <div
+      v-if="reactOverlay.open"
+      class="react-overlay"
+      :style="{ left: reactOverlay.x + 'px', top: reactOverlay.y + 'px' }"
+      @click.stop
+    >
+      <button
+        v-for="e in emojiList"
+        :key="e"
+        class="emoji-btn"
+        @click="onReact(reactOverlay.message, e)"
+      >
+        {{ e }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -304,7 +294,6 @@ const pickedFile = ref(null)
 const replyingTo = ref(null)
 
 const openMenuId = ref(null)
-const openReactId = ref(null)
 const openForwardId = ref(null)
 
 const forwardQuery = ref('')
@@ -320,42 +309,48 @@ const newGroupName = ref('')
 const renaming = ref(false)
 const changingGroupPhoto = ref(false)
 
+// Fixed reaction overlay state
+const reactOverlay = ref({
+  open: false,
+  x: 0,
+  y: 0,
+  message: null
+})
+
 function closeAllPopups() {
   openMenuId.value = null
-  openReactId.value = null
   openForwardId.value = null
-}
-
-function isAnyPopupOpen(messageId) {
-  return openMenuId.value === messageId || openReactId.value === messageId || openForwardId.value === messageId
-}
-
-// Returns 1 tick for "sent", 2 ticks for "received" or "read".
-function tickCount(m) {
-  const s = String(m?.status || '').toLowerCase()
-  if (s === 'sent' || s === '') return 1
-  if (s === 'received' || s === 'read') return 2
-  // Fallback: unknown statuses still show 1 tick.
-  return 1
+  reactOverlay.value = { open: false, x: 0, y: 0, message: null }
 }
 
 function toggleMenu(id) {
   const next = (openMenuId.value === id) ? null : id
   openMenuId.value = next
-  openReactId.value = null
   openForwardId.value = null
+  reactOverlay.value = { open: false, x: 0, y: 0, message: null }
 }
 
-function openReact(m) {
-  openReactId.value = m.id
-  openForwardId.value = null
+function openReact(m, ev) {
+  // Compute a stable viewport position (fixed overlay)
+  const rect = ev?.target?.getBoundingClientRect()
+  const baseX = rect ? rect.right : window.innerWidth / 2
+  const baseY = rect ? rect.bottom : window.innerHeight / 2
+
+  const width = 230
+  const height = 70
+  let x = Math.min(baseX - width, window.innerWidth - width - 12)
+  let y = Math.min(baseY + 8, window.innerHeight - height - 12)
+  if (x < 12) x = 12
+  if (y < 12) y = 12
+
+  reactOverlay.value = { open: true, x, y, message: m }
   openMenuId.value = null
+  openForwardId.value = null
 }
 
 function openForward(m) {
   openForwardId.value = m.id
-  openReactId.value = null
-  openMenuId.value = null
+  reactOverlay.value = { open: false, x: 0, y: 0, message: null }
   forwardQuery.value = ''
   forwardResults.value = []
 }
@@ -398,19 +393,16 @@ function formatTime(dt) {
   return dt
 }
 
-async function markIncomingAsReceivedAndRead() {
-  // Best-effort: do not block UI if backend does not support these endpoints yet.
-  try { await markConversationReceived(chatId.value) } catch {}
-  try { await markConversationRead(chatId.value) } catch {}
-}
-
-/* LOAD conversation */
 async function loadConversation() {
   loading.value = true
   error.value = ''
   closeAllPopups()
 
   try {
+    // Mark as received/read (best effort; do not block UI on failure)
+    try { await markConversationReceived(chatId.value) } catch {}
+    try { await markConversationRead(chatId.value) } catch {}
+
     const data = await getConversation(chatId.value)
 
     if (Array.isArray(data)) {
@@ -424,9 +416,6 @@ async function loadConversation() {
 
     await nextTick()
     scrollToBottom()
-
-    // Update delivery/read status for incoming messages (best-effort).
-    await markIncomingAsReceivedAndRead()
   } catch (e) {
     error.value = e.message || 'Cannot load conversation'
   } finally {
@@ -462,7 +451,6 @@ function repliedSnippet(id) {
   return '[media]'
 }
 
-/* SEND message */
 async function onSend() {
   if (sending.value) return
   if (!draft.value && !pickedFile.value) return
@@ -484,19 +472,16 @@ async function onSend() {
       kind = t.startsWith('image/') ? 'image' : 'gif'
       text = draft.value ? draft.value : null
     } else {
-      kind = 'text'
       text = draft.value
     }
 
-    const payload = {
+    await sendMessage({
       chatId: chatId.value,
       kind,
       text: text || undefined,
       mediaUrl: mediaUrl || undefined,
       replyToMessageId: replyingTo.value?.id || undefined
-    }
-
-    await sendMessage(payload)
+    })
 
     draft.value = ''
     pickedFile.value = null
@@ -510,10 +495,10 @@ async function onSend() {
   }
 }
 
-/* DELETE */
 async function onDelete(m) {
   closeAllPopups()
   if (!m?.id) return
+
   try {
     await deleteMessage(m.id)
     await loadConversation()
@@ -522,7 +507,6 @@ async function onDelete(m) {
   }
 }
 
-/* REACTIONS */
 async function onReact(m, emoji) {
   closeAllPopups()
   try {
@@ -543,7 +527,6 @@ async function toggleReaction(messageId, emoji, mine) {
   }
 }
 
-/* FORWARD by username */
 let searchTimer = null
 function searchUsers() {
   clearTimeout(searchTimer)
@@ -570,7 +553,6 @@ async function doForwardToUser(m, user) {
     if (!newChatId) throw new Error('Cannot create/open direct chat')
 
     await forwardMessage(m.id, Number(newChatId))
-
     await router.push(`/conversations/${newChatId}`)
     await loadConversation()
   } catch (e) {
@@ -578,7 +560,6 @@ async function doForwardToUser(m, user) {
   }
 }
 
-/* GROUP: change photo */
 async function onPickGroupPhoto(ev) {
   const f = ev.target.files?.[0]
   if (!f) return
@@ -596,7 +577,6 @@ async function onPickGroupPhoto(ev) {
   }
 }
 
-/* GROUP: rename */
 async function onRenameGroup() {
   if (!newGroupName.value) return
   renaming.value = true
@@ -614,7 +594,6 @@ async function onRenameGroup() {
   }
 }
 
-/* CLOSE menus */
 function onKeyDown(e) {
   if (e.key === 'Escape') closeAllPopups()
 }
@@ -697,15 +676,12 @@ watch(() => chatId.value, async () => {
   display:flex;
   margin-bottom: 12px;
   position: relative;
-  z-index: 1;
 }
 .msg-row.mine{
   justify-content:flex-end;
 }
-
-/* When a popup is open, bring this row on top */
 .msg-row.row-open{
-  z-index: 99999;
+  z-index: 50;
 }
 
 .msg-bubble{
@@ -715,12 +691,15 @@ watch(() => chatId.value, async () => {
   border-radius: 12px;
   padding: 10px 10px 6px;
   position: relative;
-  overflow: visible; /* Important: allow popovers to overflow */
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .msg-bubble.mine{
   background: #dff6df;
   border-color: #cfeccc;
+}
+
+.tick{
+  font-weight: 700;
 }
 
 .pill{
@@ -743,8 +722,20 @@ watch(() => chatId.value, async () => {
   cursor: pointer;
   margin-bottom: 8px;
 }
+.reply-title{
+  font-size: 12px;
+  color:#2f5f8c;
+}
+.reply-snippet{
+  font-size: 12px;
+  color:#2a2a2a;
+  opacity: 0.85;
+  margin-top: 2px;
+}
 
-.media-wrap{ margin-top: 4px; }
+.media-wrap{
+  margin-top: 4px;
+}
 .media-img{
   max-width: 320px;
   width: 100%;
@@ -758,7 +749,6 @@ watch(() => chatId.value, async () => {
   flex-wrap: wrap;
   margin-top: 8px;
 }
-
 .reaction-chip{
   border: 1px solid #ddd;
   background: white;
@@ -770,6 +760,12 @@ watch(() => chatId.value, async () => {
   align-items:center;
   cursor:pointer;
 }
+.reaction-chip.mine{
+  border-color:#2b6b2b;
+}
+.reaction-chip .count{
+  font-weight: 700;
+}
 
 .msg-meta{
   display:flex;
@@ -777,18 +773,6 @@ watch(() => chatId.value, async () => {
   justify-content:space-between;
   gap: 10px;
   margin-top: 8px;
-}
-
-.meta-right{
-  display:flex;
-  align-items:center;
-  gap: 8px;
-}
-
-.ticks{
-  font-size: 12px;
-  line-height: 1;
-  user-select:none;
 }
 
 .dots-btn{
@@ -800,25 +784,18 @@ watch(() => chatId.value, async () => {
   cursor:pointer;
 }
 
-/* Menus / popovers must be above everything */
-.msg-menu,
-.react-pop,
-.forward-pop{
+.msg-menu{
   position: absolute;
   right: 8px;
   top: 34px;
-  z-index: 100000;
+  z-index: 20;
   background: white;
   border: 1px solid #ddd;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-}
-
-.msg-menu{
   border-radius: 10px;
   min-width: 140px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
   overflow: hidden;
 }
-
 .menu-item{
   width: 100%;
   text-align: left;
@@ -828,34 +805,25 @@ watch(() => chatId.value, async () => {
   cursor: pointer;
   font-size: 14px;
 }
-
-.menu-item:hover{ background:#f3f3f3; }
-.menu-item.danger{ color:#b00020; }
-
-.react-pop{
-  transform: translateY(44px);
-  border-radius: 12px;
-  padding: 8px;
-  display:flex;
-  gap:6px;
-  flex-wrap: wrap;
-  width: 210px;
+.menu-item:hover{
+  background:#f3f3f3;
 }
-
-.emoji-btn{
-  border: 1px solid #ddd;
-  background:white;
-  border-radius: 10px;
-  padding: 6px 8px;
-  cursor:pointer;
-  font-size: 16px;
+.menu-item.danger{
+  color:#b00020;
 }
 
 .forward-pop{
+  position:absolute;
+  right: 8px;
+  top: 34px;
   transform: translateY(44px);
+  z-index: 20;
+  background:white;
+  border:1px solid #ddd;
   border-radius: 12px;
   padding: 10px;
   width: 240px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
 
 .forward-title{
@@ -863,7 +831,6 @@ watch(() => chatId.value, async () => {
   font-weight: 700;
   margin-bottom: 6px;
 }
-
 .forward-results{
   margin-top: 8px;
   max-height: 160px;
@@ -872,7 +839,6 @@ watch(() => chatId.value, async () => {
   flex-direction:column;
   gap:6px;
 }
-
 .forward-user{
   border: 1px solid #e3e3e3;
   background:white;
@@ -880,6 +846,9 @@ watch(() => chatId.value, async () => {
   padding: 6px 8px;
   text-align:left;
   cursor:pointer;
+}
+.forward-user:hover{
+  background:#f3f3f3;
 }
 
 .composer{
@@ -901,6 +870,10 @@ watch(() => chatId.value, async () => {
   border-radius: 12px;
   padding: 8px 10px;
   margin-bottom: 8px;
+}
+.reply-bar-snippet{
+  opacity: 0.8;
+  margin-left: 6px;
 }
 
 .composer-row{
@@ -924,5 +897,32 @@ watch(() => chatId.value, async () => {
   align-items:center;
   justify-content:space-between;
   gap: 10px;
+}
+
+/* Fixed overlay for reactions (always on top of everything) */
+.react-overlay{
+  position: fixed;
+  z-index: 999999;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 8px;
+  display:flex;
+  gap:6px;
+  flex-wrap: wrap;
+  width: 230px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.20);
+}
+
+.emoji-btn{
+  border: 1px solid #ddd;
+  background:white;
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor:pointer;
+  font-size: 16px;
+}
+.emoji-btn:hover{
+  background:#f3f3f3;
 }
 </style>
