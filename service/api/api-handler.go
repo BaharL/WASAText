@@ -27,6 +27,9 @@ func (rt *_router) Handler() http.Handler {
 	// --- CONVERSATIONS ---
 	rt.router.GET(base+"/conversations", rt.wrap(rt.listMyConversations))
 	rt.router.GET(base+"/conversations/:chatId", rt.wrap(rt.listConversationMessages))
+	
+	rt.router.POST(base+"/conversations/:chatId/received", rt.wrap(rt.markConversationReceived))
+	rt.router.POST(base+"/conversations/:chatId/read", rt.wrap(rt.markConversationRead))
 
 	// --- MESSAGES ---
 	rt.router.POST(base+"/messages", rt.wrap(rt.sendMessage))
