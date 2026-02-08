@@ -7,19 +7,14 @@ import (
 	"fmt"
 )
 
-// MarkConversationReceived updates incoming messages to "received".
-// This is a simplified per-message status model (works best for direct chats).
-func (db *appdbimpl) MarkConversationReceived(
-	ctx context.Context,
-	userIdentifier string,
-	conversationID int64,
-) error {
-
+// MarkConversationReceived upgrades incoming messages from "sent" to "received".
+func (db *appdbimpl) MarkConversationReceived(ctx context.Context, userIdentifier string, conversationID int64) error {
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return err
 	}
 
+	// Ensure membership (avoid leaking conversation existence)
 	if ok, err := db.isConversationMember(ctx, conversationID, userID); err != nil {
 		return err
 	} else if !ok {
@@ -36,18 +31,11 @@ func (db *appdbimpl) MarkConversationReceived(
 	if err != nil {
 		return fmt.Errorf("mark conversation received: %w", err)
 	}
-
 	return nil
 }
 
-// MarkConversationRead updates incoming messages to "read".
-// This upgrades both "sent" and "received" to "read".
-func (db *appdbimpl) MarkConversationRead(
-	ctx context.Context,
-	userIdentifier string,
-	conversationID int64,
-) error {
-
+// MarkConversationRead upgrades incoming messages to "read".
+func (db *appdbimpl) MarkConversationRead(ctx context.Context, userIdentifier string, conversationID int64) error {
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return err
@@ -69,7 +57,6 @@ func (db *appdbimpl) MarkConversationRead(
 	if err != nil {
 		return fmt.Errorf("mark conversation read: %w", err)
 	}
-
 	return nil
 }
 
