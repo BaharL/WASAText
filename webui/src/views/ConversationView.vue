@@ -6,12 +6,7 @@
         <div class="chat-title">
           <h1 class="h5 mb-0">{{ title }}</h1>
           <small class="text-muted">
-            {{ m.mine ? 'You' : m.senderName }} · {{ formatTime(m.createdAt) }}
-            <span v-if="m.mine" class="ms-1">
-              <span v-if="m.status === 'sent'">✓</span>
-              <span v-else-if="m.status === 'received'">✓✓</span>
-              <span v-else-if="m.status === 'read'">✓✓</span>
-            </span>
+            Chat ID: {{ chatId }}
           </small>
         </div>
       </div>
@@ -40,7 +35,7 @@
           </button>
         </div>
 
-        <!-- TEMP toggle (così non rimani bloccata se backend non manda isGroup) -->
+        <!-- TEMP toggle -->
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
@@ -62,7 +57,7 @@
       </div>
     </header>
 
-    <!-- RENAME GROUP (sticky-ish under header) -->
+    <!-- RENAME GROUP -->
     <div v-if="isGroup && openRename" class="rename-bar">
       <input
         v-model.trim="newGroupName"
@@ -82,7 +77,7 @@
       </button>
     </div>
 
-    <!-- BODY (solo questo scrolla) -->
+    <!-- BODY -->
     <div class="conv-body">
       <!-- ERROR -->
       <div v-if="error" class="alert alert-danger mx-3 mt-3">
@@ -96,7 +91,13 @@
         </p>
 
         <div v-for="m in messages" :key="m.id" class="msg-row" :class="{ mine: !!m.mine }">
-          <div class="msg-bubble" :class="{ mine: !!m.mine }">
+          <div
+            class="msg-bubble"
+            :class="{
+              mine: !!m.mine,
+              raised: (openReactId === m.id) || (openMenuId === m.id) || (openForwardId === m.id)
+            }"
+          >
             <!-- forwarded pill -->
             <div v-if="m.forwardedFromMessageId" class="pill">
               Forwarded
@@ -165,8 +166,15 @@
 
             <!-- meta + 3 dots -->
             <div class="msg-meta">
-              <small class="text-muted">
-                {{ m.mine ? 'You' : m.senderName }} · {{ formatTime(m.createdAt) }}
+              <small class="text-muted meta-left">
+                <span>{{ m.mine ? 'You' : m.senderName }}</span>
+                <span> · {{ formatTime(m.createdAt) }}</span>
+
+                <!-- ✅ TICKS (ONLY for my messages): sent -> ✓ | received/read -> ✓✓ -->
+                <span v-if="m.mine" class="ticks ms-2">
+                  <span v-if="m.status === 'sent'">✓</span>
+                  <span v-else>✓✓</span>
+                </span>
               </small>
 
               <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
@@ -238,7 +246,7 @@
       </main>
     </div>
 
-    <!-- COMPOSER (sticky bottom) -->
+    <!-- COMPOSER -->
     <footer class="composer" @click.stop>
       <!-- reply bar -->
       <div v-if="replyingTo" class="reply-bar">
@@ -405,7 +413,6 @@ async function loadConversation() {
     if (Array.isArray(data)) {
       messages.value = data
       title.value = `Conversation`
-      // isGroup non disponibile => rimane quello attuale
     } else {
       messages.value = data?.messages || data?.Messages || data?.data || []
       title.value = data?.title || data?.name || 'Conversation'
@@ -560,7 +567,6 @@ async function doForwardToUser(m, user) {
     await forwardMessage(m.id, Number(newChatId))
 
     await router.push(`/conversations/${newChatId}`)
-    // ricarico dopo la navigation
     await loadConversation()
   } catch (e) {
     error.value = e.message || 'Cannot forward message'
@@ -575,7 +581,6 @@ async function onPickGroupPhoto(ev) {
   error.value = ''
 
   try {
-    // IMPORTANT: api.js setGroupPhoto vuole FILE (FormData), non URL
     await setGroupPhoto(chatId.value, f)
     await loadConversation()
   } catch (e) {
@@ -705,6 +710,11 @@ watch(() => chatId.value, async () => {
   border-color: #cfeccc;
 }
 
+/* ✅ when any popup is open, lift this bubble above others */
+.msg-bubble.raised{
+  z-index: 5000;
+}
+
 .pill{
   display:inline-block;
   font-size: 12px;
@@ -776,6 +786,16 @@ watch(() => chatId.value, async () => {
   justify-content:space-between;
   gap: 10px;
   margin-top: 8px;
+}
+
+.meta-left{
+  display:inline-flex;
+  align-items:center;
+}
+
+.ticks{
+  font-weight: 800;
+  font-size: 12px;
 }
 
 .dots-btn{
