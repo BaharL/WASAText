@@ -175,6 +175,20 @@ export async function getConversation(chatId) {
 }
 
 /* ----------------------------------------------------------------------
+ * MESSAGE STATUS (delivered/read)
+ * ------------------------------------------------------------------- */
+
+// Marks all incoming messages in a conversation as "received" by the current user.
+export async function markConversationReceived(chatId) {
+  return request(`/conversations/${chatId}/received`, { method: 'POST' })
+}
+
+// Marks all incoming messages in a conversation as "read" by the current user.
+export async function markConversationRead(chatId) {
+  return request(`/conversations/${chatId}/read`, { method: 'POST' })
+}
+
+/* ----------------------------------------------------------------------
  * DIRECT CHATS
  * ------------------------------------------------------------------- */
 
