@@ -12,20 +12,12 @@ import (
 )
 
 // listMyConversations handles GET /conversations.
-//
-// Rules:
-//   - If Authorization is missing/invalid => 401
-//   - If the token is valid but references a user that does not exist anymore
-//     (stale session / DB reset / deleted user) => 401 (NOT 500)
-//   - Only real internal errors => 500
 func (rt *_router) listMyConversations(
 	w http.ResponseWriter,
 	r *http.Request,
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// Middleware should set ctx.UserIdentifier from the token.
-	// If empty => no valid auth.
 	if ctx.UserIdentifier == "" {
 		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
@@ -33,24 +25,19 @@ func (rt *_router) listMyConversations(
 
 	convs, err := rt.db.ListUserConversations(r.Context(), ctx.UserIdentifier)
 	if err != nil {
-
-		// ✅ stale session: token valido ma user non esiste più
 		if errors.Is(err, sql.ErrNoRows) {
-			// qui però sql.ErrNoRows può anche essere "non membro / chat non esiste".
-			// Quindi distinguo con un check sul messaggio (pragmatico).
 			if strings.Contains(err.Error(), "user not found") {
-				ctx.Logger.WithError(err).Warn("user not found while listing conversation (stale session)")
+				ctx.Logger.WithError(err).Warn("user not found while listing conversations")
 				writeJSON(w, http.StatusUnauthorized, errorMsg("invalid or expired session"))
 				return
 			}
 
-			// chat non esiste o non sei membro
-			ctx.Logger.WithError(err).Warn("chat not found or user not a member")
+			ctx.Logger.WithError(err).Warn("conversation not found")
 			writeJSON(w, http.StatusNotFound, errorMsg("conversation not found"))
 			return
 		}
 
-		ctx.Logger.WithError(err).Error("cannot list conversation messages")
+		ctx.Logger.WithError(err).Error("cannot list conversations")
 		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
@@ -61,11 +48,6 @@ func (rt *_router) listMyConversations(
 }
 
 // listConversationMessages handles GET /conversations/{chatId}.
-//
-// Rules:
-// - If Authorization is missing/invalid => 401
-// - If chat does not exist OR user is not a member => 404 (or 403, depending on your design)
-// - Only real internal errors => 500
 func (rt *_router) listConversationMessages(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -86,11 +68,6 @@ func (rt *_router) listConversationMessages(
 
 	msgs, err := rt.db.ListConversationMessages(r.Context(), ctx.UserIdentifier, chatID)
 	if err != nil {
-
-		// In your DB layer, sql.ErrNoRows can mean:
-		// - chat does not exist
-		// - OR user is not a member of that chat
-		// Returning 404 avoids leaking information and is common in chat apps.
 		if errors.Is(err, sql.ErrNoRows) {
 			ctx.Logger.WithError(err).Warn("chat not found or user not a member")
 			writeJSON(w, http.StatusNotFound, errorMsg("conversation not found"))
@@ -105,4 +82,68 @@ func (rt *_router) listConversationMessages(
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"messages": msgs,
 	})
+}
+
+// markConversationReceived handles POST /conversations/{chatId}/received.
+func (rt *_router) markConversationReceived(
+	w http.ResponseWriter,
+	r *http.Request,
+	ps httprouter.Params,
+	ctx reqcontext.RequestContext,
+) {
+	if ctx.UserIdentifier == "" {
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
+		return
+	}
+
+	chatIDStr := ps.ByName("chatId")
+	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	if err != nil || chatID <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid chatId"))
+		return
+	}
+
+	if err := rt.db.MarkConversationReceived(r.Context(), ctx.UserIdentifier, chatID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorMsg("conversation not found"))
+			return
+		}
+		ctx.Logger.WithError(err).Error("cannot mark conversation received")
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// markConversationRead handles POST /conversations/{chatId}/read.
+func (rt *_router) markConversationRead(
+	w http.ResponseWriter,
+	r *http.Request,
+	ps httprouter.Params,
+	ctx reqcontext.RequestContext,
+) {
+	if ctx.UserIdentifier == "" {
+		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
+		return
+	}
+
+	chatIDStr := ps.ByName("chatId")
+	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	if err != nil || chatID <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorMsg("invalid chatId"))
+		return
+	}
+
+	if err := rt.db.MarkConversationRead(r.Context(), ctx.UserIdentifier, chatID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorMsg("conversation not found"))
+			return
+		}
+		ctx.Logger.WithError(err).Error("cannot mark conversation read")
+		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
