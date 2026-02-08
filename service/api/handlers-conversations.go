@@ -12,6 +12,11 @@ import (
 )
 
 // listMyConversations handles GET /conversations.
+//
+// Rules:
+//   - If Authorization is missing/invalid => 401
+//   - If token is valid but user does not exist anymore => 401 (stale session)
+//   - Only real internal errors => 500
 func (rt *_router) listMyConversations(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -26,8 +31,9 @@ func (rt *_router) listMyConversations(
 	convs, err := rt.db.ListUserConversations(r.Context(), ctx.UserIdentifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Pragmatic stale-session detection (DB wraps sql.ErrNoRows with "user not found...")
 			if strings.Contains(err.Error(), "user not found") {
-				ctx.Logger.WithError(err).Warn("user not found while listing conversations")
+				ctx.Logger.WithError(err).Warn("stale session while listing conversations")
 				writeJSON(w, http.StatusUnauthorized, errorMsg("invalid or expired session"))
 				return
 			}
@@ -85,6 +91,7 @@ func (rt *_router) listConversationMessages(
 }
 
 // markConversationReceived handles POST /conversations/{chatId}/received.
+// It upgrades incoming messages from "sent" to "received".
 func (rt *_router) markConversationReceived(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -117,6 +124,7 @@ func (rt *_router) markConversationReceived(
 }
 
 // markConversationRead handles POST /conversations/{chatId}/read.
+// It upgrades incoming messages to "read".
 func (rt *_router) markConversationRead(
 	w http.ResponseWriter,
 	r *http.Request,
