@@ -11,6 +11,8 @@ func isValidMediaType(contentType string) bool {
 		"image/png",
 		"image/gif",
 		"image/webp",
+		"image/heic",
+		"image/heif",
 	}
 
 	for _, p := range validPrefixes {
@@ -33,6 +35,10 @@ func getExtensionFromContentType(contentType string) string {
 		return ".gif"
 	case strings.Contains(ct, "webp"):
 		return ".webp"
+	case strings.Contains(ct, "heic"):
+    	return ".heic"
+	case strings.Contains(ct, "heif"):
+    	return ".heif"
 	default:
 		return ".jpg"
 	}
