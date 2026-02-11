@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"bytes"
 
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"github.com/julienschmidt/httprouter"
@@ -205,9 +205,8 @@ func (rt *_router) setMyPhoto(
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
-	  "message":  "Photo updated",
-	  "photoUrl": photoURL,
+		"message":  "Photo updated",
+		"photoUrl": photoURL,
 	})
 
 }
-

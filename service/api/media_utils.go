@@ -36,9 +36,9 @@ func getExtensionFromContentType(contentType string) string {
 	case strings.Contains(ct, "webp"):
 		return ".webp"
 	case strings.Contains(ct, "heic"):
-    	return ".heic"
+		return ".heic"
 	case strings.Contains(ct, "heif"):
-    	return ".heif"
+		return ".heif"
 	default:
 		return ".jpg"
 	}
