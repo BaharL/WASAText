@@ -157,9 +157,7 @@ func (rt *_router) setMyPhoto(
 	buf := make([]byte, 512)
 	n, _ := file.Read(buf)
 	detectedType := http.DetectContentType(buf[:n])
-	reader := io.MultiReader(strings.NewReader(string(buf[:n])), file) // NO: meglio bytes.NewReader
-	// meglio:
-	// reader := io.MultiReader(bytes.NewReader(buf[:n]), file)
+	reader := io.MultiReader(bytes.NewReader(buf[:n]), file)
 
 	// Usa detectedType, non fidarti del Content-Type del client
 	if !isValidMediaType(detectedType) {
@@ -206,6 +204,10 @@ func (rt *_router) setMyPhoto(
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"photoUrl": photoURL})
+	writeJSON(w, http.StatusOK, map[string]string{
+	  "message":  "Photo updated",
+	  "photoUrl": photoURL,
+	})
+
 }
 
