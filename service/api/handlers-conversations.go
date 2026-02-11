@@ -17,7 +17,7 @@ import (
 //   - If Authorization is missing/invalid => 401
 //   - If token is valid but user does not exist anymore => 401 (stale session)
 //   - Only real internal errors => 500
-func (rt *_router) listMyConversations(
+func (rt *_router) getMyConversations(
 	w http.ResponseWriter,
 	r *http.Request,
 	_ httprouter.Params,
@@ -54,7 +54,7 @@ func (rt *_router) listMyConversations(
 }
 
 // listConversationMessages handles GET /conversations/{chatId}.
-func (rt *_router) listConversationMessages(
+func (rt *_router) getConversation(
 	w http.ResponseWriter,
 	r *http.Request,
 	ps httprouter.Params,
