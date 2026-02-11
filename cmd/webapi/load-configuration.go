@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/ardanlabs/conf"
-	"gopkg.in/yaml.v2"
 	"io"
 	"os"
 	"time"
+
+	"github.com/ardanlabs/conf"
+	"gopkg.in/yaml.v2"
 )
 
 // WebAPIConfiguration describes the web API configuration. This structure is automatically parsed by
@@ -17,10 +18,10 @@ type WebAPIConfiguration struct {
 		Path string `conf:"default:/conf/config.yml"`
 	}
 	Web struct {
-		APIHost         string        `conf:"default:0.0.0.0:3000"`
+		APIHost         string        `conf:"default:0.0.0.0:3000"`  // ✅ 0.0.0.0 per accesso esterno
 		DebugHost       string        `conf:"default:0.0.0.0:4000"`
-		ReadTimeout     time.Duration `conf:"default:5s"`
-		WriteTimeout    time.Duration `conf:"default:5s"`
+		ReadTimeout     time.Duration `conf:"default:30s"`           // ✅ Aumentato a 30s
+		WriteTimeout    time.Duration `conf:"default:30s"`           // ✅ Aumentato a 30s
 		ShutdownTimeout time.Duration `conf:"default:5s"`
 	}
 	Debug bool
@@ -36,7 +37,7 @@ type WebAPIConfiguration struct {
 // Note that the configuration file can be specified only via CLI or environment variable.
 func loadConfiguration() (WebAPIConfiguration, error) {
 	var cfg WebAPIConfiguration
-
+	
 	// Try to load configuration from environment variables and command line switches
 	if err := conf.Parse(os.Args[1:], "CFG", &cfg); err != nil {
 		if errors.Is(err, conf.ErrHelpWanted) {
@@ -49,7 +50,7 @@ func loadConfiguration() (WebAPIConfiguration, error) {
 		}
 		return cfg, fmt.Errorf("parsing config: %w", err)
 	}
-
+	
 	// Override values from YAML if specified and if it exists (useful in k8s/compose)
 	fp, err := os.Open(cfg.Config.Path)
 	if err != nil && !os.IsNotExist(err) {
@@ -65,6 +66,6 @@ func loadConfiguration() (WebAPIConfiguration, error) {
 		}
 		_ = fp.Close()
 	}
-
+	
 	return cfg, nil
 }
