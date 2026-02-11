@@ -124,14 +124,23 @@ func (rt *_router) setMyPhoto(
 	_ httprouter.Params,
 	ctx reqcontext.RequestContext,
 ) {
-	// Auth
 	if ctx.UserIdentifier == "" {
 		writeJSON(w, http.StatusUnauthorized, errorMsg("missing or invalid Authorization header"))
 		return
 	}
 
-	// Max 10MB
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	const maxUpload = 10 << 20 // 10MB
+
+	// HARD limit sul body (questo evita hangup e upload enormi)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+
+	// Parse multipart form (maxMemory)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		// se supera MaxBytesReader spesso è "http: request body too large"
+		if strings.Contains(strings.ToLower(err.Error()), "request body too large") {
+			writeJSON(w, http.StatusRequestEntityTooLarge, errorMsg("file too large (max 10MB)"))
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, errorMsg("invalid multipart form"))
 		return
 	}
@@ -143,25 +152,22 @@ func (rt *_router) setMyPhoto(
 	}
 	defer file.Close()
 
-	// Detect MIME (meglio così che fidarsi del header)
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		buf := make([]byte, 512)
-		n, _ := file.Read(buf)
-		contentType = http.DetectContentType(buf[:n])
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorMsg("cannot reset file reader"))
-			return
-		}
-	}
+	// Sniff sicuro senza Seek
+	buf := make([]byte, 512)
+	n, _ := file.Read(buf)
+	detectedType := http.DetectContentType(buf[:n])
+	reader := io.MultiReader(strings.NewReader(string(buf[:n])), file) // NO: meglio bytes.NewReader
+	// meglio:
+	// reader := io.MultiReader(bytes.NewReader(buf[:n]), file)
 
-	if !isValidMediaType(contentType) {
+	// Usa detectedType, non fidarti del Content-Type del client
+	if !isValidMediaType(detectedType) {
+		// se vuoi supportare HEIC/HEIF, aggiungili in isValidMediaType + getExtension...
 		writeJSON(w, http.StatusBadRequest, errorMsg("unsupported media type"))
 		return
 	}
 
-	// Estensione coerente col type
-	ext := getExtensionFromContentType(contentType)
+	ext := getExtensionFromContentType(detectedType)
 	if ext == "" {
 		ext = strings.ToLower(filepath.Ext(header.Filename))
 	}
@@ -169,13 +175,11 @@ func (rt *_router) setMyPhoto(
 		ext = defaultImageExt
 	}
 
-	// Crea cartella uploads/profiles
 	if err := os.MkdirAll("./uploads/profiles", 0o755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorMsg("cannot create profiles directory"))
 		return
 	}
 
-	// Sovrascrive la foto dell'utente (ok)
 	filename := fmt.Sprintf("%s%s", ctx.UserIdentifier, ext)
 	dstPath := filepath.Join("./uploads/profiles", filename)
 
@@ -186,22 +190,21 @@ func (rt *_router) setMyPhoto(
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
+	// copia usando reader (che include i bytes sniffati)
+	// io.Copy(dst, reader)
+	if _, err := io.Copy(dst, reader); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorMsg("cannot save file"))
 		return
 	}
 
-	// ✅ FIX: ServeFiles è sotto /v1/uploads/...
 	photoURL := "/v1/uploads/profiles/" + filename
 
-	// ✅ QUESTO è il pezzo che manca: salva nel DB (users.photo_url)
 	if err := rt.db.SetUserPhoto(r.Context(), ctx.UserIdentifier, photoURL); err != nil {
 		ctx.Logger.WithError(err).Error("cannot persist user photo url")
 		writeJSON(w, http.StatusInternalServerError, errorMsg("internal server error"))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
-		"photoUrl": photoURL,
-	})
+	writeJSON(w, http.StatusOK, map[string]string{"photoUrl": photoURL})
 }
+
