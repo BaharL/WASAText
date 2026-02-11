@@ -561,7 +561,52 @@ paths:
         "400": { $ref: "#/components/responses/BadRequestError" }
         "401": { $ref: "#/components/responses/UnauthorizedError" }
         "500": { $ref: "#/components/responses/InternalServerError" }
+  
+  /v1/context:
+    get:
+      tags: [user]
+      summary: Get current user context
+      description: |
+        Retrieve information about the currently authenticated user.
+      operationId: getContextReply
+      responses:
+        "200":
+          description: User context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401": { $ref: "#/components/responses/UnauthorizedError" }
 
+  /v1/conversations/{chatId}/received:
+    post:
+      tags: [conversations]
+      summary: Mark conversation as received
+      description: |
+        Mark all messages in a conversation as received by the current user.
+      operationId: markConversationReceived
+      parameters:
+        - $ref: "#/components/parameters/ChatID"
+      responses:
+        "204":
+          description: Conversation marked as received
+        "401": { $ref: "#/components/responses/UnauthorizedError" }
+        "404": { $ref: "#/components/responses/NotFoundError" }
+
+  /v1/conversations/{chatId}/read:
+    post:
+      tags: [conversations]
+      summary: Mark conversation as read
+      description: |
+        Mark all messages in a conversation as read by the current user.
+      operationId: markConversationRead
+      parameters:
+        - $ref: "#/components/parameters/ChatID"
+      responses:
+        "204":
+          description: Conversation marked as read
+        "401": { $ref: "#/components/responses/UnauthorizedError" }
+        "404": { $ref: "#/components/responses/NotFoundError" }
 components:
   securitySchemes:
     bearerAuth:
