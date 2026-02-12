@@ -50,6 +50,15 @@
         </button>
 
         <button
+          v-if="isGroup"
+          type="button"
+          class="btn btn-sm btn-outline-danger"
+          @click="onLeaveGroup"
+        >
+          Leave Group
+        </button>
+
+        <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
           :disabled="loading"
@@ -312,7 +321,8 @@ import {
   setGroupPhoto,
   setGroupName,
   markConversationReceived,
-  markConversationRead
+  markConversationRead,
+  leaveGroup
 } from '../services/api.js'
 
 const route = useRoute()
@@ -348,6 +358,9 @@ const openRename = ref(false)
 const newGroupName = ref('')
 const renaming = ref(false)
 const changingGroupPhoto = ref(false)
+
+// Auto-refresh interval
+let refreshInterval = null
 
 // Fixed reaction overlay state
 const reactOverlay = ref({
@@ -692,6 +705,32 @@ async function onRenameGroup() {
   }
 }
 
+async function onLeaveGroup() {
+  if (!confirm('Are you sure you want to leave this group?')) return
+  
+  try {
+    await leaveGroup(chatId.value)
+    await router.push('/conversations')
+  } catch (e) {
+    console.error('Leave group error:', e)
+    error.value = e.message || 'Cannot leave group'
+  }
+}
+
+function startAutoRefresh() {
+  // Auto-refresh ogni 3 secondi
+  refreshInterval = setInterval(() => {
+    loadConversation()
+  }, 3000)
+}
+
+function stopAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+}
+
 function onKeyDown(e) {
   if (e.key === 'Escape') {
     closeAllPopups()
@@ -706,11 +745,13 @@ onMounted(() => {
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('click', onDocClick)
   loadConversation()
+  startAutoRefresh()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('click', onDocClick)
+  stopAutoRefresh()
   if (searchTimer) clearTimeout(searchTimer)
 })
 
@@ -871,6 +912,7 @@ watch(() => chatId.value, async () => {
   display:block;
 }
 
+/* Reactions styling - rispetta regola: 1 reazione per utente */
 .reactions-row{
   display:flex;
   gap:6px;
@@ -893,12 +935,17 @@ watch(() => chatId.value, async () => {
   transform: scale(1.05);
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+/* Evidenzia la reazione dell'utente corrente */
 .reaction-chip.mine{
   border-color:#2b6b2b;
   background: #eef9ee;
 }
+.reaction-chip .emoji{
+  font-size: 14px;
+}
 .reaction-chip .count{
   font-weight: 700;
+  font-size: 11px;
 }
 
 .msg-meta{
