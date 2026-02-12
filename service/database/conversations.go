@@ -145,10 +145,7 @@ func (db *appdbimpl) ListUserConversations(
 			}
 		}
 
-		// UnreadCount per-user:
-		// - messaggi in quella chat
-		// - non miei (sender_id <> me)
-		// - che per me sono ancora NULL / sent / received (cioè non read)
+		// ✅ FIX UnreadCount: usa message_status per user
 		var unreadCount int
 		err = db.c.QueryRowContext(ctx, `
 			SELECT COUNT(*)
@@ -157,7 +154,7 @@ func (db *appdbimpl) ListUserConversations(
 				ON ms.message_id = m.id AND ms.user_id = ?
 			WHERE m.chat_id = ?
 			  AND m.sender_id <> ?
-			  AND (ms.status IS NULL OR ms.status IN ('sent','received'))
+			  AND (ms.status IS NULL OR ms.status <> 'read')
 		`, userID, conv.ID, userID).Scan(&unreadCount)
 		if err != nil {
 			return nil, fmt.Errorf("count unread messages: %w", err)
@@ -216,7 +213,7 @@ func (db *appdbimpl) ListConversationMessages(
 		return nil, fmt.Errorf("check conversation membership: %w", err)
 	}
 
-	// Carico i messaggi + nome del mittente
+	// ✅ FIX: Calcola status dinamicamente da message_status
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
 			m.id,
@@ -228,13 +225,40 @@ func (db *appdbimpl) ListConversationMessages(
 			m.media_url,
 			m.reply_to_message_id,
 			m.forwarded_from_message_id,
-			m.status,
+
+			-- ✅ NUOVO: Calcola status dinamicamente
+			CASE
+				WHEN m.sender_id = ? THEN
+					CASE
+						WHEN EXISTS (
+							SELECT 1
+							FROM conversation_members cm
+							JOIN message_status ms
+							  ON ms.user_id = cm.user_id AND ms.message_id = m.id
+							WHERE cm.conversation_id = m.chat_id
+							  AND cm.user_id <> ?
+							  AND ms.status = 'read'
+						) THEN 'read'
+						WHEN EXISTS (
+							SELECT 1
+							FROM conversation_members cm
+							JOIN message_status ms
+							  ON ms.user_id = cm.user_id AND ms.message_id = m.id
+							WHERE cm.conversation_id = m.chat_id
+							  AND cm.user_id <> ?
+							  AND ms.status = 'received'
+						) THEN 'received'
+						ELSE 'sent'
+					END
+				ELSE 'sent'
+			END AS status,
+
 			datetime(m.created_at) AS created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		WHERE m.chat_id = ?
 		ORDER BY m.created_at ASC, m.id ASC
-	`, conversationID)
+	`, userID, userID, userID, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("list conversation messages: %w", err)
 	}
@@ -258,7 +282,7 @@ func (db *appdbimpl) ListConversationMessages(
 			&mediaURL,
 			&replyID,
 			&fwdID,
-			&m.Status,
+			&m.Status,  // ✅ Ora questo viene dal CASE calcolato
 			&m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan conversation messages: %w", err)
