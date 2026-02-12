@@ -331,7 +331,6 @@ const reactOverlay = ref({ open:false, x:0, y:0, message:null })
 let refreshInterval = null
 let searchTimer = null
 
-// جلوگیری از overlap
 let inFlight = false
 let aborter = null
 
@@ -448,34 +447,41 @@ async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
   loading.value = true
   error.value = ''
 
+  // Abort richiesta precedente
   try { aborter?.abort() } catch {}
   aborter = new AbortController()
 
   try {
-    // Carica info conversazione (title, isGroup)
-    const info = await getConversationInfo(chatId.value)
-    title.value = info?.title || info?.name || 'Conversation'
-    isGroup.value = info?.isGroup === true
-
-    // Carica messaggi
-    const data = await getConversation(chatId.value, { signal: aborter.signal })
-    
-    const newMsgs = extractMessages(data)
-    const oldLastId = messages.value.length ? messages.value[messages.value.length - 1].id : null
-    const newLastId = newMsgs.length ? newMsgs[newMsgs.length - 1].id : null
-
     const hadNearBottom = isNearBottom()
 
-    const changed = (oldLastId !== newLastId) || (messages.value.length !== newMsgs.length)
-    if (changed) {
-      messages.value = newMsgs
-      await nextTick()
-      if (forceScroll || hadNearBottom) scrollToBottom()
+    const data = await getConversation(chatId.value, { signal: aborter.signal })
 
-      if (markStatus) {
-        try { await markConversationReceived(chatId.value) } catch {}
-        try { await markConversationRead(chatId.value) } catch {}
-      }
+    // Info header (dal backend già completo)
+    title.value = extractTitle(data)
+    isGroup.value = extractIsGroup(data)
+
+    // ✅ Sempre aggiorna i messaggi: status/tick possono cambiare senza new message
+    messages.value = extractMessages(data)
+
+    await nextTick()
+    if (forceScroll || hadNearBottom) scrollToBottom()
+
+    // ✅ markStatus indipendente da "changed"
+    if (markStatus) {
+      try { await markConversationReceived(chatId.value) } catch {}
+      try { await markConversationRead(chatId.value) } catch {}
+
+      // ✅ Re-fetch per vedere i tick aggiornati
+      try {
+        // Ricrea AbortController per evitare race conditions
+        try { aborter?.abort() } catch {}
+        aborter = new AbortController()
+
+        const data2 = await getConversation(chatId.value, { signal: aborter.signal })
+        messages.value = extractMessages(data2)
+        await nextTick()
+        if (forceScroll || hadNearBottom) scrollToBottom()
+      } catch {}
     }
   } catch (e) {
     if (e?.name !== 'AbortError') {
