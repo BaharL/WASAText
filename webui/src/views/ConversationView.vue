@@ -738,6 +738,12 @@ watch(() => chatId.value, async () => {
   justify-content:space-between;
 }
 
+.header-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
 .header-right{
   display:flex;
   align-items:center;
@@ -777,12 +783,21 @@ watch(() => chatId.value, async () => {
   display:flex;
   margin-bottom: 12px;
   position: relative;
+  transition: background-color 0.3s ease;
 }
 .msg-row.mine{
   justify-content:flex-end;
 }
 .msg-row.row-open{
   z-index: 50;
+}
+.msg-row.highlight .msg-bubble{
+  animation: highlightPulse 1s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% { background-color: inherit; }
+  50% { background-color: #fff3cd; }
 }
 
 .msg-bubble{
@@ -801,6 +816,9 @@ watch(() => chatId.value, async () => {
 
 .tick{
   font-weight: 700;
+}
+.read-tick{
+  color: #2b6b2b;
 }
 
 .pill{
@@ -822,6 +840,10 @@ watch(() => chatId.value, async () => {
   border-radius: 10px;
   cursor: pointer;
   margin-bottom: 8px;
+  transition: background 0.2s;
+}
+.reply-preview:hover{
+  background: rgba(91,155,213,0.18);
 }
 .reply-title{
   font-size: 12px;
@@ -832,6 +854,11 @@ watch(() => chatId.value, async () => {
   color:#2a2a2a;
   opacity: 0.85;
   margin-top: 2px;
+  word-break: break-word;
+}
+
+.msg-content{
+  word-break: break-word;
 }
 
 .media-wrap{
@@ -860,9 +887,15 @@ watch(() => chatId.value, async () => {
   gap:6px;
   align-items:center;
   cursor:pointer;
+  transition: all 0.2s;
+}
+.reaction-chip:hover{
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 .reaction-chip.mine{
   border-color:#2b6b2b;
+  background: #eef9ee;
 }
 .reaction-chip .count{
   font-weight: 700;
@@ -883,6 +916,11 @@ watch(() => chatId.value, async () => {
   line-height: 1;
   padding: 0 6px;
   cursor:pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.dots-btn:hover{
+  opacity: 1;
 }
 
 .msg-menu{
@@ -900,17 +938,21 @@ watch(() => chatId.value, async () => {
 .menu-item{
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 0;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
+  transition: background 0.2s;
 }
 .menu-item:hover{
   background:#f3f3f3;
 }
 .menu-item.danger{
   color:#b00020;
+}
+.menu-item.danger:hover{
+  background: #fee;
 }
 
 .forward-pop{
@@ -947,6 +989,7 @@ watch(() => chatId.value, async () => {
   padding: 6px 8px;
   text-align:left;
   cursor:pointer;
+  transition: background 0.2s;
 }
 .forward-user:hover{
   background:#f3f3f3;
@@ -972,6 +1015,12 @@ watch(() => chatId.value, async () => {
   padding: 8px 10px;
   margin-bottom: 8px;
 }
+.reply-bar-left{
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .reply-bar-snippet{
   opacity: 0.8;
   margin-left: 6px;
@@ -990,6 +1039,10 @@ watch(() => chatId.value, async () => {
   padding: 6px 10px;
   cursor:pointer;
   user-select:none;
+  transition: background 0.2s;
+}
+.attach-btn:hover{
+  background: #f8f8f8;
 }
 
 .picked-file{
@@ -998,6 +1051,9 @@ watch(() => chatId.value, async () => {
   align-items:center;
   justify-content:space-between;
   gap: 10px;
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
 }
 
 /* Fixed overlay for reactions (always on top of everything) */
@@ -1022,8 +1078,10 @@ watch(() => chatId.value, async () => {
   padding: 6px 8px;
   cursor:pointer;
   font-size: 16px;
+  transition: all 0.2s;
 }
 .emoji-btn:hover{
   background:#f3f3f3;
+  transform: scale(1.1);
 }
 </style>
