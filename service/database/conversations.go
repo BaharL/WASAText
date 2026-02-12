@@ -218,7 +218,6 @@ func (db *appdbimpl) ListConversationMessages(
 
 	// Carico i messaggi + nome del mittente
 	rows, err := db.c.QueryContext(ctx, `
-		rows, err := db.c.QueryContext(ctx, `
 		SELECT
 			m.id,
 			m.chat_id,
@@ -229,15 +228,13 @@ func (db *appdbimpl) ListConversationMessages(
 			m.media_url,
 			m.reply_to_message_id,
 			m.forwarded_from_message_id,
-			COALESCE(ms.status, m.status) AS status,
+			m.status,
 			datetime(m.created_at) AS created_at
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
-		LEFT JOIN message_status ms
-			ON ms.message_id = m.id AND ms.user_id = ?
 		WHERE m.chat_id = ?
 		ORDER BY m.created_at ASC, m.id ASC
-	`, userID, conversationID)
+	`, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("list conversation messages: %w", err)
 	}
