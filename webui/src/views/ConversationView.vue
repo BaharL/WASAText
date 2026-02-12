@@ -3,6 +3,14 @@
     <!-- HEADER (sticky) -->
     <header class="conv-header">
       <div class="header-left">
+        <button 
+          type="button" 
+          class="btn btn-sm btn-outline-secondary me-2"
+          @click="$router.push('/conversations')"
+          title="Back to conversations"
+        >
+          ← Back
+        </button>
         <div class="chat-title">
           <h1 class="h5 mb-0">{{ title }}</h1>
           <small class="text-muted">Chat ID: {{ chatId }}</small>
@@ -58,6 +66,7 @@
         v-model.trim="newGroupName"
         class="form-control form-control-sm"
         placeholder="New group name…"
+        @keydown.enter="onRenameGroup"
       >
       <button
         class="btn btn-sm btn-success"
@@ -79,7 +88,7 @@
 
       <main ref="messagesEl" class="conv-main" @click="closeAllPopups">
         <p v-if="!loading && !error && messages.length === 0" class="text-muted mx-3 mt-3">
-          No messages yet.
+          No messages yet. Start the conversation!
         </p>
 
         <div
@@ -116,6 +125,7 @@
                   class="media-img"
                   :src="normalizeMediaUrl(m.mediaUrl)"
                   alt="image"
+                  loading="lazy"
                 >
                 <video
                   v-else-if="m.kind === 'gif'"
@@ -141,7 +151,7 @@
                 :key="r.emoji"
                 class="reaction-chip"
                 :class="{ mine: r.mine }"
-                title="Toggle reaction"
+                :title="r.mine ? 'Remove your reaction' : 'Add this reaction'"
                 @click.stop="toggleReaction(m.id, r.emoji, r.mine)"
               >
                 <span class="emoji">{{ r.emoji }}</span>
@@ -153,20 +163,32 @@
               <small class="text-muted">
                 {{ m.mine ? 'You' : m.senderName }} · {{ formatTime(m.createdAt) }}
                 <span v-if="m.mine" class="ms-1 tick">
-                  <span v-if="m.status === 'sent'">✓</span>
-                  <span v-else-if="m.status === 'received'">✓✓</span>
-                  <span v-else-if="m.status === 'read'">✓✓</span>
+                  <span v-if="m.status === 'sent'" title="Sent">✓</span>
+                  <span v-else-if="m.status === 'received'" title="Received">✓✓</span>
+                  <span v-else-if="m.status === 'read'" title="Read" class="read-tick">✓✓</span>
                 </span>
               </small>
 
-              <button class="dots-btn" @click.stop="toggleMenu(m.id)">…</button>
+              <button 
+                class="dots-btn" 
+                :aria-label="`Message options for ${m.mine ? 'your' : m.senderName + '\'s'} message`"
+                @click.stop="toggleMenu(m.id)"
+              >
+                …
+              </button>
 
               <div v-if="openMenuId === m.id" class="msg-menu" @click.stop>
-                <button class="menu-item" @click="startReply(m)">Reply</button>
-                <button class="menu-item" @click="openForward(m)">Forward</button>
-                <button class="menu-item" @click="openReact(m, $event)">React</button>
+                <button class="menu-item" @click="startReply(m)">
+                  💬 Reply
+                </button>
+                <button class="menu-item" @click="openForward(m)">
+                  ➡️ Forward
+                </button>
+                <button class="menu-item" @click="openReact(m, $event)">
+                  😊 React
+                </button>
                 <button v-if="m.mine" class="menu-item danger" @click="onDelete(m)">
-                  Delete
+                  🗑️ Delete
                 </button>
               </div>
 
@@ -204,35 +226,51 @@
     <footer class="composer" @click.stop>
       <div v-if="replyingTo" class="reply-bar">
         <div class="reply-bar-left">
-          Replying to <strong>{{ replyingTo.senderName }}</strong>:
+          Replying to <strong>{{ replyingTo.mine ? 'yourself' : replyingTo.senderName }}</strong>:
           <span class="reply-bar-snippet">
             {{ replyingTo.text || (replyingTo.kind !== 'text' ? '[media]' : '') }}
           </span>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" @click="cancelReply">×</button>
+        <button 
+          class="btn btn-sm btn-outline-secondary" 
+          title="Cancel reply"
+          @click="cancelReply"
+        >
+          ×
+        </button>
       </div>
 
       <div class="composer-row">
         <label class="attach-btn" title="Attach media">
           📎
-          <input type="file" class="d-none" accept="image/*,video/*" @change="onPickFile">
+          <input 
+            type="file" 
+            class="d-none" 
+            accept="image/*,video/*" 
+            @change="onPickFile"
+          >
         </label>
 
         <input
+          ref="messageInput"
           v-model="draft"
           class="form-control"
           placeholder="Write a message…"
-          @keydown.enter.prevent="onSend"
+          @keydown.enter.exact.prevent="onSend"
         >
 
-        <button class="btn btn-success" :disabled="sending || (!draft && !pickedFile)" @click="onSend">
+        <button 
+          class="btn btn-success" 
+          :disabled="sending || (!draft && !pickedFile)" 
+          @click="onSend"
+        >
           <span v-if="sending">Sending…</span>
           <span v-else>Send</span>
         </button>
       </div>
 
       <div v-if="pickedFile" class="picked-file">
-        <span class="small">Selected: {{ pickedFile.name }}</span>
+        <span class="small">📎 Selected: {{ pickedFile.name }}</span>
         <button class="btn btn-sm btn-outline-secondary" @click="clearPickedFile">Remove</button>
       </div>
     </footer>
@@ -248,6 +286,7 @@
         v-for="e in emojiList"
         :key="e"
         class="emoji-btn"
+        :title="`React with ${e}`"
         @click="onReact(reactOverlay.message, e)"
       >
         {{ e }}
@@ -302,6 +341,7 @@ const forwardResults = ref([])
 const emojiList = ['👍','❤️','😂','😮','😢','🔥','👏','🙏']
 
 const messagesEl = ref(null)
+const messageInput = ref(null)
 
 const isGroup = ref(false)
 const openRename = ref(false)
@@ -359,8 +399,7 @@ function startReply(m) {
   replyingTo.value = m
   closeAllPopups()
   nextTick(() => {
-    const input = document.querySelector('.composer-row input.form-control')
-    input?.focus()
+    messageInput.value?.focus()
   })
 }
 
@@ -376,6 +415,8 @@ function onPickFile(ev) {
   const f = ev.target.files?.[0]
   if (!f) return
   pickedFile.value = f
+  // Reset input per permettere di selezionare lo stesso file di nuovo
+  ev.target.value = ''
 }
 
 function normalizeMediaUrl(u) {
@@ -388,9 +429,25 @@ function normalizeMediaUrl(u) {
 
 function formatTime(dt) {
   if (!dt) return ''
-  const m = String(dt).match(/(\d{2}):(\d{2})/)
-  if (m) return `${m[1]}:${m[2]}`
-  return dt
+  
+  // Se è già formattato come HH:MM, ritorna così
+  const timeMatch = String(dt).match(/(\d{2}):(\d{2})/)
+  if (timeMatch) return `${timeMatch[1]}:${timeMatch[2]}`
+  
+  // Prova a parsare come Date
+  try {
+    const date = new Date(dt)
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleTimeString('it-IT', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    }
+  } catch (e) {
+    // Fallback
+  }
+  
+  return String(dt)
 }
 
 async function loadConversation() {
@@ -400,8 +457,17 @@ async function loadConversation() {
 
   try {
     // Mark as received/read (best effort; do not block UI on failure)
-    try { await markConversationReceived(chatId.value) } catch {}
-    try { await markConversationRead(chatId.value) } catch {}
+    try { 
+      await markConversationReceived(chatId.value) 
+    } catch (e) {
+      console.warn('Failed to mark as received:', e)
+    }
+    
+    try { 
+      await markConversationRead(chatId.value) 
+    } catch (e) {
+      console.warn('Failed to mark as read:', e)
+    }
 
     const data = await getConversation(chatId.value)
 
@@ -411,12 +477,15 @@ async function loadConversation() {
     } else {
       messages.value = data?.messages || data?.Messages || data?.data || []
       title.value = data?.title || data?.name || 'Conversation'
-      if (typeof data?.isGroup === 'boolean') isGroup.value = data.isGroup
+      if (typeof data?.isGroup === 'boolean') {
+        isGroup.value = data.isGroup
+      }
     }
 
     await nextTick()
     scrollToBottom()
   } catch (e) {
+    console.error('Load conversation error:', e)
     error.value = e.message || 'Cannot load conversation'
   } finally {
     loading.value = false
@@ -426,24 +495,35 @@ async function loadConversation() {
 function scrollToBottom() {
   const el = messagesEl.value
   if (!el) return
-  el.scrollTop = el.scrollHeight
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight
+  })
 }
 
 function scrollToMessage(messageId) {
   closeAllPopups()
   nextTick(() => {
     const target = document.getElementById(`msg-${messageId}`)
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Highlight effect
+      target.parentElement?.classList.add('highlight')
+      setTimeout(() => {
+        target.parentElement?.classList.remove('highlight')
+      }, 2000)
+    }
   })
 }
 
 function repliedMessage(id) {
   return messages.value.find(x => x.id === id) || null
 }
+
 function repliedSender(id) {
   const m = repliedMessage(id)
   return m ? (m.mine ? 'You' : (m.senderName || 'unknown')) : 'unknown'
 }
+
 function repliedSnippet(id) {
   const m = repliedMessage(id)
   if (!m) return '(message not found)'
@@ -453,7 +533,7 @@ function repliedSnippet(id) {
 
 async function onSend() {
   if (sending.value) return
-  if (!draft.value && !pickedFile.value) return
+  if (!draft.value.trim() && !pickedFile.value) return
 
   sending.value = true
   error.value = ''
@@ -470,9 +550,9 @@ async function onSend() {
 
       const t = pickedFile.value.type || ''
       kind = t.startsWith('image/') ? 'image' : 'gif'
-      text = draft.value ? draft.value : null
+      text = draft.value.trim() || null
     } else {
-      text = draft.value
+      text = draft.value.trim()
     }
 
     await sendMessage({
@@ -488,7 +568,13 @@ async function onSend() {
     replyingTo.value = null
 
     await loadConversation()
+    
+    // Refocus input
+    nextTick(() => {
+      messageInput.value?.focus()
+    })
   } catch (e) {
+    console.error('Send message error:', e)
     error.value = e.message || 'Cannot send message'
   } finally {
     sending.value = false
@@ -498,11 +584,14 @@ async function onSend() {
 async function onDelete(m) {
   closeAllPopups()
   if (!m?.id) return
+  
+  if (!confirm('Are you sure you want to delete this message?')) return
 
   try {
     await deleteMessage(m.id)
     await loadConversation()
   } catch (e) {
+    console.error('Delete error:', e)
     error.value = e.message || 'Cannot delete message'
   }
 }
@@ -513,16 +602,21 @@ async function onReact(m, emoji) {
     await addReaction(m.id, emoji)
     await loadConversation()
   } catch (e) {
+    console.error('Add reaction error:', e)
     error.value = e.message || 'Cannot add reaction'
   }
 }
 
 async function toggleReaction(messageId, emoji, mine) {
   try {
-    if (mine) await removeReaction(messageId, emoji)
-    else await addReaction(messageId, emoji)
+    if (mine) {
+      await removeReaction(messageId, emoji)
+    } else {
+      await addReaction(messageId, emoji)
+    }
     await loadConversation()
   } catch (e) {
+    console.error('Toggle reaction error:', e)
     error.value = e.message || 'Cannot toggle reaction'
   }
 }
@@ -539,10 +633,11 @@ function searchUsers() {
     try {
       const res = await listUsers(q)
       forwardResults.value = Array.isArray(res) ? res : (res?.users || [])
-    } catch {
+    } catch (e) {
+      console.error('Search users error:', e)
       forwardResults.value = []
     }
-  }, 250)
+  }, 300)
 }
 
 async function doForwardToUser(m, user) {
@@ -556,6 +651,7 @@ async function doForwardToUser(m, user) {
     await router.push(`/conversations/${newChatId}`)
     await loadConversation()
   } catch (e) {
+    console.error('Forward error:', e)
     error.value = e.message || 'Cannot forward message'
   }
 }
@@ -570,6 +666,7 @@ async function onPickGroupPhoto(ev) {
     await setGroupPhoto(chatId.value, f)
     await loadConversation()
   } catch (e) {
+    console.error('Change photo error:', e)
     error.value = e.message || 'Cannot change group photo'
   } finally {
     changingGroupPhoto.value = false
@@ -588,6 +685,7 @@ async function onRenameGroup() {
     newGroupName.value = ''
     await loadConversation()
   } catch (e) {
+    console.error('Rename error:', e)
     error.value = e.message || 'Cannot rename group'
   } finally {
     renaming.value = false
@@ -595,8 +693,11 @@ async function onRenameGroup() {
 }
 
 function onKeyDown(e) {
-  if (e.key === 'Escape') closeAllPopups()
+  if (e.key === 'Escape') {
+    closeAllPopups()
+  }
 }
+
 function onDocClick() {
   closeAllPopups()
 }
@@ -610,13 +711,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('click', onDocClick)
+  if (searchTimer) clearTimeout(searchTimer)
 })
 
 watch(() => chatId.value, async () => {
   await loadConversation()
 })
 </script>
-
 <style scoped>
 .conversation-page{
   height: calc(100vh - 60px);
