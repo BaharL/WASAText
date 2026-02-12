@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ConversationSummary è il modello restituito da GET /conversations.
@@ -116,7 +117,7 @@ func (db *appdbimpl) ListUserConversations(
 		}
 
 		// Tipo conversazione
-		isGroup := convType.Valid && convType.String == "group"
+		isGroup := convType.Valid && strings.ToLower(convType.String) == "group"
 		conv.IsGroup = isGroup
 
 		// Title + PhotoURL
@@ -379,7 +380,7 @@ func (db *appdbimpl) GetConversationInfo(
 		return ConversationInfo{}, err
 	}
 
-	isGroup := convType.Valid && convType.String == "group"
+	isGroup := convType.Valid && strings.ToLower(convType.String) == "group"
 	info.IsGroup = isGroup
 
 	if isGroup {
