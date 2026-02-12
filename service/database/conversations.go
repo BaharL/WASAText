@@ -15,7 +15,6 @@ type ConversationSummary struct {
 	IsGroup     bool     `json:"isGroup"`
 	PhotoURL    *string  `json:"photoUrl,omitempty"`
 	LastMessage *Message `json:"lastMessage,omitempty"`
-	UnreadCount int      `json:"unreadCount"`
 }
 
 // ConversationInfo contiene i metadati di una conversazione
@@ -27,7 +26,7 @@ type ConversationInfo struct {
 }
 
 // ensureMessageStatusTable crea la tabella message_status se non esiste.
-// Serve perché ListUserConversations la usa anche prima che tu chiami /received o /read.
+// Serve per le spunte (received/read).
 func (db *appdbimpl) ensureMessageStatusTable(ctx context.Context) {
 	_, _ = db.c.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS message_status (
@@ -51,7 +50,7 @@ func (db *appdbimpl) ListUserConversations(
 		return nil, err
 	}
 
-	// IMPORTANT: serve per evitare "no such table: message_status"
+	// Safe: per evitare "no such table: message_status" in altri endpoint
 	db.ensureMessageStatusTable(ctx)
 
 	rows, err := db.c.QueryContext(ctx, `
@@ -116,7 +115,6 @@ func (db *appdbimpl) ListUserConversations(
 			return nil, fmt.Errorf("scan user conversations: %w", err)
 		}
 
-		// Tipo conversazione
 		isGroup := convType.Valid && strings.ToLower(convType.String) == "group"
 		conv.IsGroup = isGroup
 
@@ -127,7 +125,6 @@ func (db *appdbimpl) ListUserConversations(
 			} else {
 				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
 			}
-
 			if groupPhoto.Valid && groupPhoto.String != "" {
 				s := groupPhoto.String
 				conv.PhotoURL = &s
@@ -138,28 +135,11 @@ func (db *appdbimpl) ListUserConversations(
 			} else {
 				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
 			}
-
 			if directOtherPhoto.Valid && directOtherPhoto.String != "" {
 				s := directOtherPhoto.String
 				conv.PhotoURL = &s
 			}
 		}
-
-		// ✅ FIX UnreadCount: usa message_status per user
-		var unreadCount int
-		err = db.c.QueryRowContext(ctx, `
-			SELECT COUNT(*)
-			FROM messages m
-			LEFT JOIN message_status ms
-				ON ms.message_id = m.id AND ms.user_id = ?
-			WHERE m.chat_id = ?
-			  AND m.sender_id <> ?
-			  AND (ms.status IS NULL OR ms.status <> 'read')
-		`, userID, conv.ID, userID).Scan(&unreadCount)
-		if err != nil {
-			return nil, fmt.Errorf("count unread messages: %w", err)
-		}
-		conv.UnreadCount = unreadCount
 
 		// Last message (se c'è)
 		if lastMsgID.Valid {
@@ -196,10 +176,10 @@ func (db *appdbimpl) ListConversationMessages(
 		return nil, err
 	}
 
-	// Ensure table exists (safe)
+	// ensure status table exists
 	db.ensureMessageStatusTable(ctx)
 
-	// Controllo membership
+	// membership check
 	var exists int
 	err = db.c.QueryRowContext(ctx, `
 		SELECT 1
@@ -213,7 +193,9 @@ func (db *appdbimpl) ListConversationMessages(
 		return nil, fmt.Errorf("check conversation membership: %w", err)
 	}
 
-	// ✅ FIX: Calcola status dinamicamente da message_status
+	// NOTE:
+	// - Per i messaggi "mine", lo status dipende da cosa hanno fatto GLI ALTRI membri (received/read).
+	// - Per i messaggi non miei, lato UI non mostriamo spunte, quindi possiamo mettere 'sent' fisso.
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
 			m.id,
@@ -226,10 +208,10 @@ func (db *appdbimpl) ListConversationMessages(
 			m.reply_to_message_id,
 			m.forwarded_from_message_id,
 
-			-- ✅ NUOVO: Calcola status dinamicamente
 			CASE
 				WHEN m.sender_id = ? THEN
 					CASE
+						-- READ se almeno un altro membro ha read
 						WHEN EXISTS (
 							SELECT 1
 							FROM conversation_members cm
@@ -239,6 +221,7 @@ func (db *appdbimpl) ListConversationMessages(
 							  AND cm.user_id <> ?
 							  AND ms.status = 'read'
 						) THEN 'read'
+						-- RECEIVED se almeno un altro membro ha received
 						WHEN EXISTS (
 							SELECT 1
 							FROM conversation_members cm
@@ -282,7 +265,7 @@ func (db *appdbimpl) ListConversationMessages(
 			&mediaURL,
 			&replyID,
 			&fwdID,
-			&m.Status,  // ✅ Ora questo viene dal CASE calcolato
+			&m.Status,
 			&m.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan conversation messages: %w", err)
@@ -291,7 +274,6 @@ func (db *appdbimpl) ListConversationMessages(
 		if senderName.Valid {
 			m.SenderName = senderName.String
 		}
-
 		if text.Valid {
 			s := text.String
 			m.Text = &s
@@ -349,10 +331,11 @@ func (db *appdbimpl) GetConversationInfo(
 		return ConversationInfo{}, err
 	}
 
-	// check membership
+	// membership check
 	var exists int
 	err = db.c.QueryRowContext(ctx, `
-		SELECT 1 FROM conversation_members
+		SELECT 1
+		FROM conversation_members
 		WHERE conversation_id = ? AND user_id = ?
 	`, conversationID, userID).Scan(&exists)
 	if err != nil {
@@ -366,6 +349,7 @@ func (db *appdbimpl) GetConversationInfo(
 			c.name,
 			c.photo_url,
 
+			-- direct other name
 			(
 				SELECT u2.name
 				FROM conversation_members cm2
@@ -381,7 +365,6 @@ func (db *appdbimpl) GetConversationInfo(
 				WHERE cm2.conversation_id = c.id AND cm2.user_id <> ?
 				LIMIT 1
 			) AS direct_other_photo
-
 		FROM conversations c
 		WHERE c.id = ?
 	`, userID, userID, conversationID)
