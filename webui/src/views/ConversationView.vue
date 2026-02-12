@@ -279,7 +279,6 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getConversation,
-  getConversationInfo,
   sendMessage,
   uploadMedia,
   deleteMessage,
@@ -439,6 +438,26 @@ function scrollToMessage(messageId) {
       setTimeout(() => target.parentElement?.classList.remove('highlight'), 2000)
     }
   })
+}
+  
+function extractIsGroup(data) {
+  console.log('🔍 data ricevuta:', data)
+  console.log('📌 data.isGroup =', data?.isGroup)
+  
+  if (typeof data?.isGroup === 'boolean') {
+    console.log('✅ isGroup =', data.isGroup)
+    return data.isGroup
+  }
+  console.log('❌ isGroup non trovato')
+  return false
+}
+
+function extractTitle(data) {
+  return data?.title || data?.name || 'Conversation'
+}
+
+function extractMessages(data) {
+  return data?.messages || data?.Messages || []
 }
 
 async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
