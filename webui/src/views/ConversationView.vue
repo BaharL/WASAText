@@ -279,6 +279,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getConversation,
+  getConversationInfo,
   sendMessage,
   uploadMedia,
   deleteMessage,
@@ -441,61 +442,40 @@ function scrollToMessage(messageId) {
   })
 }
 
-function extractIsGroup(data) {
-  // برای اینکه اگر API اسم فیلد رو یکم متفاوت داد هم درست دربیاد
-  if (typeof data?.isGroup === 'boolean') return data.isGroup
-  if (typeof data?.IsGroup === 'boolean') return data.IsGroup
-  if (typeof data?.is_group === 'boolean') return data.is_group
-  return false
-}
-
-function extractTitle(data) {
-  return data?.title || data?.name || data?.Title || 'Conversation'
-}
-
-function extractMessages(data) {
-  if (Array.isArray(data)) return data
-  return data?.messages || data?.Messages || []
-}
-
 async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
   if (inFlight) return
   inFlight = true
   loading.value = true
   error.value = ''
 
-  // اگر درخواست قبلی هنوز بازه، کنسلش کن
   try { aborter?.abort() } catch {}
   aborter = new AbortController()
 
   try {
+    // Carica info conversazione (title, isGroup)
+    const info = await getConversationInfo(chatId.value)
+    title.value = info?.title || info?.name || 'Conversation'
+    isGroup.value = info?.isGroup === true
+
+    // Carica messaggi
     const data = await getConversation(chatId.value, { signal: aborter.signal })
-
-    // set header info
-    title.value = extractTitle(data)
-    isGroup.value = extractIsGroup(data)
-
+    
     const newMsgs = extractMessages(data)
     const oldLastId = messages.value.length ? messages.value[messages.value.length - 1].id : null
     const newLastId = newMsgs.length ? newMsgs[newMsgs.length - 1].id : null
 
     const hadNearBottom = isNearBottom()
 
-    // فقط اگر واقعاً تغییر شده، replace کن
     const changed = (oldLastId !== newLastId) || (messages.value.length !== newMsgs.length)
     if (changed) {
       messages.value = newMsgs
-
       await nextTick()
       if (forceScroll || hadNearBottom) scrollToBottom()
 
-      // فقط وقتی پیام جدید آمد، وضعیت را mark کن (طبق چک لیست)
       if (markStatus) {
         try { await markConversationReceived(chatId.value) } catch {}
         try { await markConversationRead(chatId.value) } catch {}
       }
-    } else {
-      // تغییر نکرده، کاری نکن
     }
   } catch (e) {
     if (e?.name !== 'AbortError') {
@@ -507,7 +487,7 @@ async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
     inFlight = false
   }
 }
-
+  
 async function onSend() {
   if (sending.value) return
   if (!draft.value.trim() && !pickedFile.value) return
@@ -544,7 +524,6 @@ async function onSend() {
     pickedFile.value = null
     replyingTo.value = null
 
-    // بعد از ارسال، فوراً رفرش + اسکرول
     await loadConversation({ forceScroll:true, markStatus:true })
     nextTick(() => messageInput.value?.focus())
   } catch (e) {
