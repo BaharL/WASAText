@@ -39,7 +39,11 @@ const DIRECT_TITLES_KEY = 'directChatNames'
 function loadDirectTitleMap() {
   const raw = localStorage.getItem(DIRECT_TITLES_KEY)
   if (!raw) return {}
-  try { return JSON.parse(raw) } catch { return {} }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
 }
 
 export function getDirectChatTitle(chatId) {
@@ -57,17 +61,23 @@ export function saveDirectChatTitle(chatId, displayName) {
  * INTERNAL REQUEST WRAPPER
  * ------------------------------------------------------------------- */
 
-async function request(path, { method = 'GET', data, headers, params } = {}) {
+async function request(path, { method = 'GET', data, headers, params, signal } = {}) {
   try {
     const response = await axios.request({
       url: path,
       method,
       headers: buildAuthHeaders(headers),
       data,
-      params
+      params,
+      signal // ✅ allow AbortController cancellation
     })
     return response.data
   } catch (error) {
+    // ✅ If request was canceled, rethrow it as-is (caller can ignore)
+    if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+      throw error
+    }
+
     let message = 'Request failed'
 
     const dataResp = error?.response?.data
@@ -133,19 +143,20 @@ export async function listUsers(search) {
   })
 }
 
-export async function setMyPhoto(file) {
+export async function setMyPhoto(file, { signal } = {}) {
   const formData = new FormData()
   formData.append('file', file)
 
   return request('/users/photo', {
     method: 'PUT',
     // NON forzare content-type: axios lo mette da solo col boundary
-    data: formData
+    data: formData,
+    signal
   })
 }
 
-export async function getContext() {
-  const ctx = await request('/context', { method: 'GET' })
+export async function getContext({ signal } = {}) {
+  const ctx = await request('/context', { method: 'GET', signal })
 
   if (ctx?.username !== undefined) {
     localStorage.setItem('username', ctx.username || '')
@@ -166,12 +177,12 @@ export async function getContext() {
  * CONVERSATIONS
  * ------------------------------------------------------------------- */
 
-export async function getMyConversations() {
-  return request('/conversations', { method: 'GET' })
+export async function getMyConversations({ signal } = {}) {
+  return request('/conversations', { method: 'GET', signal })
 }
 
-export async function getConversation(chatId) {
-  return request(`/conversations/${chatId}`, { method: 'GET' })
+export async function getConversation(chatId, { signal } = {}) {
+  return request(`/conversations/${chatId}`, { method: 'GET', signal })
 }
 
 /* ----------------------------------------------------------------------
@@ -179,23 +190,24 @@ export async function getConversation(chatId) {
  * ------------------------------------------------------------------- */
 
 // Marks all incoming messages in a conversation as "received" by the current user.
-export async function markConversationReceived(chatId) {
-  return request(`/conversations/${chatId}/received`, { method: 'POST' })
+export async function markConversationReceived(chatId, { signal } = {}) {
+  return request(`/conversations/${chatId}/received`, { method: 'POST', signal })
 }
 
 // Marks all incoming messages in a conversation as "read" by the current user.
-export async function markConversationRead(chatId) {
-  return request(`/conversations/${chatId}/read`, { method: 'POST' })
+export async function markConversationRead(chatId, { signal } = {}) {
+  return request(`/conversations/${chatId}/read`, { method: 'POST', signal })
 }
 
 /* ----------------------------------------------------------------------
  * DIRECT CHATS
  * ------------------------------------------------------------------- */
 
-export async function createDirect(otherIdentifier) {
+export async function createDirect(otherIdentifier, { signal } = {}) {
   return request('/direct', {
     method: 'POST',
-    data: { members: [otherIdentifier] }
+    data: { members: [otherIdentifier] },
+    signal
   })
 }
 
@@ -203,71 +215,78 @@ export async function createDirect(otherIdentifier) {
  * MESSAGES
  * ------------------------------------------------------------------- */
 
-export async function sendMessage(payload) {
-  return request('/messages', { method: 'POST', data: payload })
+export async function sendMessage(payload, { signal } = {}) {
+  return request('/messages', { method: 'POST', data: payload, signal })
 }
 
-export async function forwardMessage(messageId, toChatId) {
+export async function forwardMessage(messageId, toChatId, { signal } = {}) {
   return request(`/messages/${messageId}/forward`, {
     method: 'POST',
-    data: { toChatId }
+    data: { toChatId },
+    signal
   })
 }
 
-export async function addReaction(messageId, emoji) {
+export async function addReaction(messageId, emoji, { signal } = {}) {
   return request(`/messages/${messageId}/reactions`, {
     method: 'POST',
-    data: { emoji }
+    data: { emoji },
+    signal
   })
 }
 
-export async function removeReaction(messageId, emoji) {
+export async function removeReaction(messageId, emoji, { signal } = {}) {
   return request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    signal
   })
 }
 
-export async function deleteMessage(messageId) {
-  return request(`/messages/${messageId}`, { method: 'DELETE' })
+export async function deleteMessage(messageId, { signal } = {}) {
+  return request(`/messages/${messageId}`, { method: 'DELETE', signal })
 }
 
 /* ----------------------------------------------------------------------
  * GROUPS
  * ------------------------------------------------------------------- */
 
-export async function createGroup(name, members = []) {
+export async function createGroup(name, members = [], { signal } = {}) {
   return request('/groups', {
     method: 'POST',
-    data: { name, members }
+    data: { name, members },
+    signal
   })
 }
 
-export async function addToGroup(chatId, members) {
+export async function addToGroup(chatId, members, { signal } = {}) {
   return request(`/groups/${chatId}/members`, {
     method: 'POST',
-    data: { members }
+    data: { members },
+    signal
   })
 }
 
-export async function leaveGroup(chatId) {
-  return request(`/groups/${chatId}/members/me`, { method: 'DELETE' })
+export async function leaveGroup(chatId, { signal } = {}) {
+  return request(`/groups/${chatId}/members/me`, { method: 'DELETE', signal })
 }
 
-export async function setGroupName(chatId, name) {
+export async function setGroupName(chatId, name, { signal } = {}) {
   return request(`/groups/${chatId}/name`, {
     method: 'PUT',
-    data: { name }
+    data: { name },
+    signal
   })
 }
 
-export async function setGroupPhoto(chatId, file) {
+export async function setGroupPhoto(chatId, file, { signal } = {}) {
   const formData = new FormData()
   formData.append('file', file)
 
   return request(`/groups/${chatId}/photo`, {
     method: 'PUT',
     // NON mettere headers Content-Type: axios lo mette con boundary
-    data: formData
+    data: formData,
+    signal
   })
 }
 
@@ -275,13 +294,13 @@ export async function setGroupPhoto(chatId, file) {
  * MEDIA
  * ------------------------------------------------------------------- */
 
-export async function uploadMedia(file) {
+export async function uploadMedia(file, { signal } = {}) {
   const formData = new FormData()
   formData.append('file', file)
 
   return request('/media', {
     method: 'POST',
-    data: formData
+    data: formData,
+    signal
   })
 }
-
