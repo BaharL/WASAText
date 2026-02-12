@@ -7,7 +7,10 @@ import (
 	"fmt"
 )
 
-// ConversationSummary è il modello restituito da GET /conversations.
+// =====================
+// MODELS
+// =====================
+
 type ConversationSummary struct {
 	ID          int64    `json:"id"`
 	Title       string   `json:"title"`
@@ -17,7 +20,6 @@ type ConversationSummary struct {
 	UnreadCount int      `json:"unreadCount"`
 }
 
-// ConversationInfo contiene i metadati di una conversazione
 type ConversationInfo struct {
 	ID       int64   `json:"id"`
 	Title    string  `json:"title"`
@@ -25,8 +27,10 @@ type ConversationInfo struct {
 	PhotoURL *string `json:"photoUrl,omitempty"`
 }
 
-// ListUserConversations restituisce tutte le conversazioni a cui partecipa l'utente,
-// con l'ultimo messaggio (se presente) + title/photo "giusti" per direct e group.
+// =====================
+// LIST USER CONVERSATIONS
+// =====================
+
 func (db *appdbimpl) ListUserConversations(
 	ctx context.Context,
 	userIdentifier string,
@@ -45,7 +49,6 @@ func (db *appdbimpl) ListUserConversations(
 			c.photo_url,
 			MAX(m.id) AS last_message_id,
 
-			-- Direct: nome dell'altro utente (rispetto a me)
 			(
 				SELECT u2.name
 				FROM conversation_members cm2
@@ -83,7 +86,6 @@ func (db *appdbimpl) ListUserConversations(
 		var groupName sql.NullString
 		var groupPhoto sql.NullString
 		var lastMsgID sql.NullInt64
-
 		var directOtherName sql.NullString
 		var directOtherPhoto sql.NullString
 
@@ -99,62 +101,57 @@ func (db *appdbimpl) ListUserConversations(
 			return nil, fmt.Errorf("scan user conversations: %w", err)
 		}
 
-		// Tipo conversazione
 		isGroup := convType.Valid && convType.String == "group"
 		conv.IsGroup = isGroup
 
-		// Title + PhotoURL: logica principale
 		if isGroup {
-			// Title: se manca name, fallback "Chat <id>"
 			if groupName.Valid && groupName.String != "" {
 				conv.Title = groupName.String
 			} else {
 				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
 			}
-
-			// Photo: prende c.photo_url
 			if groupPhoto.Valid && groupPhoto.String != "" {
 				s := groupPhoto.String
 				conv.PhotoURL = &s
 			}
-
 		} else {
-			// Direct chat: title = nome dell'altro utente
 			if directOtherName.Valid && directOtherName.String != "" {
 				conv.Title = directOtherName.String
 			} else {
 				conv.Title = fmt.Sprintf("Chat %d", conv.ID)
 			}
-
-			// Direct: photo = foto dell'altro utente
 			if directOtherPhoto.Valid && directOtherPhoto.String != "" {
 				s := directOtherPhoto.String
 				conv.PhotoURL = &s
 			}
 		}
 
-		// Conta messaggi non letti (messaggi ricevuti ma non ancora letti dall'utente corrente)
-		var unreadCount int
+		// =====================
+		// UNREAD COUNT (PER USER)
+		// =====================
+
+		var unread int
 		err = db.c.QueryRowContext(ctx, `
 			SELECT COUNT(*)
-			FROM messages
-			WHERE chat_id = ? 
-			  AND sender_id <> ?
-			  AND status IN ('sent', 'received')
-		`, conv.ID, userID).Scan(&unreadCount)
+			FROM messages m
+			LEFT JOIN message_status ms
+			  ON ms.message_id = m.id AND ms.user_id = ?
+			WHERE m.chat_id = ?
+			  AND m.sender_id <> ?
+			  AND (ms.status IS NULL OR ms.status <> 'read')
+		`, userID, conv.ID, userID).Scan(&unread)
 		if err != nil {
 			return nil, fmt.Errorf("count unread messages: %w", err)
 		}
-		conv.UnreadCount = unreadCount
+		conv.UnreadCount = unread
 
-		// Last message (se c'è)
+		// =====================
+		// LAST MESSAGE
+		// =====================
+
 		if lastMsgID.Valid {
 			lastMsg, err := db.getMessageByID(ctx, lastMsgID.Int64)
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					return nil, fmt.Errorf("load last message for conversation %d: %w", conv.ID, err)
-				}
-			} else {
+			if err == nil {
 				conv.LastMessage = &lastMsg
 			}
 		}
@@ -169,53 +166,47 @@ func (db *appdbimpl) ListUserConversations(
 	return convs, nil
 }
 
-// ListConversationMessages restituisce tutti i messaggi di una conversazione,
-// se l'utente è membro di quella conversazione.
+// =====================
+// LIST CONVERSATION MESSAGES
+// =====================
+
 func (db *appdbimpl) ListConversationMessages(
 	ctx context.Context,
 	userIdentifier string,
 	conversationID int64,
 ) ([]Message, error) {
 
-	// Trovo l'ID interno dell'utente corrente
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return nil, err
 	}
 
-	// Controllo che l'utente faccia parte della conversazione
-	var exists int
-	err = db.c.QueryRowContext(ctx, `
-		SELECT 1
-		FROM conversation_members
-		WHERE conversation_id = ? AND user_id = ?
-	`, conversationID, userID).Scan(&exists)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
-		}
-		return nil, fmt.Errorf("check conversation membership: %w", err)
+	if ok, err := db.isConversationMember(ctx, conversationID, userID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, sql.ErrNoRows
 	}
 
-	// Carico i messaggi + nome del mittente
 	rows, err := db.c.QueryContext(ctx, `
 		SELECT
 			m.id,
 			m.chat_id,
 			m.sender_id,
-			u.name AS sender_name,
+			u.name,
 			m.kind,
 			m.text,
 			m.media_url,
 			m.reply_to_message_id,
 			m.forwarded_from_message_id,
-			m.status,
-			datetime(m.created_at) AS created_at
+			datetime(m.created_at),
+			COALESCE(ms.status, 'sent') as user_status
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
+		LEFT JOIN message_status ms
+		  ON ms.message_id = m.id AND ms.user_id = ?
 		WHERE m.chat_id = ?
 		ORDER BY m.created_at ASC, m.id ASC
-	`, conversationID)
+	`, userID, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("list conversation messages: %w", err)
 	}
@@ -239,16 +230,15 @@ func (db *appdbimpl) ListConversationMessages(
 			&mediaURL,
 			&replyID,
 			&fwdID,
-			&m.Status,
 			&m.CreatedAt,
+			&m.Status,
 		); err != nil {
-			return nil, fmt.Errorf("scan conversation messages: %w", err)
+			return nil, err
 		}
 
 		if senderName.Valid {
 			m.SenderName = senderName.String
 		}
-
 		if text.Valid {
 			s := text.String
 			m.Text = &s
@@ -266,51 +256,33 @@ func (db *appdbimpl) ListConversationMessages(
 			m.ForwardedFromMessageID = &v
 		}
 
-		// segno se è un messaggio dell'utente loggato
 		m.Mine = (m.SenderID == userID)
 
 		messages = append(messages, m)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows conversation messages: %w", err)
-	}
-
-	// Carico tutte le reactions in 1 query e le attacco ai messaggi
-	ids := make([]int64, 0, len(messages))
-	for i := range messages {
-		ids = append(ids, messages[i].ID)
-	}
-
-	reactionMap, err := db.loadReactionSummaries(ctx, userID, ids)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range messages {
-		if rs, ok := reactionMap[messages[i].ID]; ok {
-			messages[i].Reactions = rs
-		}
-	}
-
 	return messages, nil
 }
 
-// GetConversationInfo restituisce solo le info di base di una conversazione
-func (db *appdbimpl) GetConversationInfo(ctx context.Context, userIdentifier string, conversationID int64) (ConversationInfo, error) {
+// =====================
+// GET CONVERSATION INFO
+// =====================
+
+func (db *appdbimpl) GetConversationInfo(
+	ctx context.Context,
+	userIdentifier string,
+	conversationID int64,
+) (ConversationInfo, error) {
+
 	userID, err := db.getUserIDByIdentifier(ctx, userIdentifier)
 	if err != nil {
 		return ConversationInfo{}, err
 	}
 
-	// check membership
-	var exists int
-	err = db.c.QueryRowContext(ctx, `
-		SELECT 1 FROM conversation_members
-		WHERE conversation_id = ? AND user_id = ?
-	`, conversationID, userID).Scan(&exists)
-	if err != nil {
-		return ConversationInfo{}, err // sql.ErrNoRows => not member
+	if ok, err := db.isConversationMember(ctx, conversationID, userID); err != nil {
+		return ConversationInfo{}, err
+	} else if !ok {
+		return ConversationInfo{}, sql.ErrNoRows
 	}
 
 	row := db.c.QueryRowContext(ctx, `
@@ -318,70 +290,31 @@ func (db *appdbimpl) GetConversationInfo(ctx context.Context, userIdentifier str
 			c.id,
 			c.type,
 			c.name,
-			c.photo_url,
-
-			-- direct other name
-			(
-				SELECT u2.name
-				FROM conversation_members cm2
-				JOIN users u2 ON u2.id = cm2.user_id
-				WHERE cm2.conversation_id = c.id AND cm2.user_id <> ?
-				LIMIT 1
-			) AS direct_other_name,
-
-			(
-				SELECT u2.photo_url
-				FROM conversation_members cm2
-				JOIN users u2 ON u2.id = cm2.user_id
-				WHERE cm2.conversation_id = c.id AND cm2.user_id <> ?
-				LIMIT 1
-			) AS direct_other_photo
-
+			c.photo_url
 		FROM conversations c
 		WHERE c.id = ?
-	`, userID, userID, conversationID)
+	`, conversationID)
 
 	var info ConversationInfo
 	var convType sql.NullString
-	var groupName sql.NullString
-	var groupPhoto sql.NullString
-	var directOtherName sql.NullString
-	var directOtherPhoto sql.NullString
+	var name sql.NullString
+	var photo sql.NullString
 
-	if err := row.Scan(
-		&info.ID,
-		&convType,
-		&groupName,
-		&groupPhoto,
-		&directOtherName,
-		&directOtherPhoto,
-	); err != nil {
+	if err := row.Scan(&info.ID, &convType, &name, &photo); err != nil {
 		return ConversationInfo{}, err
 	}
 
-	isGroup := convType.Valid && convType.String == "group"
-	info.IsGroup = isGroup
+	info.IsGroup = convType.Valid && convType.String == "group"
 
-	if isGroup {
-		if groupName.Valid && groupName.String != "" {
-			info.Title = groupName.String
-		} else {
-			info.Title = fmt.Sprintf("Chat %d", info.ID)
-		}
-		if groupPhoto.Valid && groupPhoto.String != "" {
-			s := groupPhoto.String
-			info.PhotoURL = &s
-		}
+	if name.Valid && name.String != "" {
+		info.Title = name.String
 	} else {
-		if directOtherName.Valid && directOtherName.String != "" {
-			info.Title = directOtherName.String
-		} else {
-			info.Title = fmt.Sprintf("Chat %d", info.ID)
-		}
-		if directOtherPhoto.Valid && directOtherPhoto.String != "" {
-			s := directOtherPhoto.String
-			info.PhotoURL = &s
-		}
+		info.Title = fmt.Sprintf("Chat %d", info.ID)
+	}
+
+	if photo.Valid && photo.String != "" {
+		s := photo.String
+		info.PhotoURL = &s
 	}
 
 	return info, nil
