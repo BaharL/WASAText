@@ -25,6 +25,8 @@ type AppDatabase interface {
 	// GetName returns the username for the given identifier (Bearer token).
 	GetName(ctx context.Context, identifier string) (string, error)
 
+	GetConversationInfo(ctx context.Context, userIdentifier string, conversationID int64) (ConversationInfo, error)
+
 	// Search users by name (prefix / like)
 	SearchUsers(ctx context.Context, search string) ([]SearchUserResult, error)
 
