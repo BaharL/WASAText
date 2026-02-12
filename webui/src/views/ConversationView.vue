@@ -472,12 +472,13 @@ async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
 
   try {
     const hadNearBottom = isNearBottom()
-
     const data = await getConversation(chatId.value, { signal: aborter.signal })
-
+    console.log('🚀 loadConversation ricevuto data:', data)
     // Info header (dal backend già completo)
     title.value = extractTitle(data)
+    console.log('🏷️ title.value =', title.value)
     isGroup.value = extractIsGroup(data)
+    console.log('🎯 isGroup.value =', isGroup.value)
 
     // ✅ Sempre aggiorna i messaggi: status/tick possono cambiare senza new message
     messages.value = extractMessages(data)
