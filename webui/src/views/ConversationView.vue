@@ -461,7 +461,11 @@ function extractMessages(data) {
 }
 
 async function loadConversation({ forceScroll=false, markStatus=false } = {}) {
-  if (inFlight) return
+  console.log('🔔 loadConversation CHIAMATA! forceScroll:', forceScroll, 'markStatus:', markStatus)
+  if (inFlight) {
+    console.log('⚠️ inFlight = true, BLOCCO chiamata')
+    return
+  }
   inFlight = true
   loading.value = true
   error.value = ''
@@ -674,7 +678,6 @@ async function onLeaveGroup() {
 function startAutoRefresh() {
   stopAutoRefresh()
   refreshInterval = setInterval(() => {
-    // در poll، markStatus رو false می‌ذاریم که هر ۲.۵ ثانیه به API فشار نیاد
     loadConversation({ forceScroll:false, markStatus:false })
   }, 2500)
 }
@@ -695,7 +698,7 @@ onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('click', onDocClick)
 
-  // load اول: markStatus = true
+  
   await loadConversation({ forceScroll:true, markStatus:true })
   startAutoRefresh()
 })
@@ -709,7 +712,6 @@ onBeforeUnmount(() => {
   try { aborter?.abort() } catch {}
 })
 
-// وقتی chatId عوض میشه: فوراً load + restart polling
 watch(() => chatId.value, async () => {
   stopAutoRefresh()
   await loadConversation({ forceScroll:true, markStatus:true })
@@ -718,7 +720,7 @@ watch(() => chatId.value, async () => {
 </script>
 
 <style scoped>
-/* همون CSS خودت — همونایی که گذاشتی رو نگه داشتم */
+
 .conversation-page{ height: calc(100vh - 60px); display:flex; flex-direction:column; background:#f6f7f8; }
 .conv-header{ position: sticky; top: 0; z-index: 2000; background: white; border-bottom: 1px solid #e6e6e6; padding: 12px 16px; display:flex; align-items:center; justify-content:space-between; }
 .header-left{ display:flex; align-items:center; gap:12px; }
