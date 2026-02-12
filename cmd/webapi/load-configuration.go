@@ -3,11 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ardanlabs/conf"
+	"gopkg.in/yaml.v2"
 	"io"
 	"os"
 	"time"
-	"github.com/ardanlabs/conf"
-	"gopkg.in/yaml.v2"
 )
 
 type WebAPIConfiguration struct {
@@ -29,7 +29,7 @@ type WebAPIConfiguration struct {
 
 func loadConfiguration() (WebAPIConfiguration, error) {
 	var cfg WebAPIConfiguration
-	
+
 	if err := conf.Parse(os.Args[1:], "CFG", &cfg); err != nil {
 		if errors.Is(err, conf.ErrHelpWanted) {
 			usage, err := conf.Usage("CFG", &cfg)
@@ -41,7 +41,7 @@ func loadConfiguration() (WebAPIConfiguration, error) {
 		}
 		return cfg, fmt.Errorf("parsing config: %w", err)
 	}
-	
+
 	fp, err := os.Open(cfg.Config.Path)
 	if err != nil && !os.IsNotExist(err) {
 		return cfg, fmt.Errorf("can't read the config file, while it exists: %w", err)
@@ -56,6 +56,6 @@ func loadConfiguration() (WebAPIConfiguration, error) {
 		}
 		_ = fp.Close()
 	}
-	
+
 	return cfg, nil
 }

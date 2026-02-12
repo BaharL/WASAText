@@ -1,4 +1,5 @@
 //go:build webui
+
 package main
 
 import (
@@ -34,13 +35,13 @@ func applyCORSHandler(h http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
 		w.Header().Set("Access-Control-Max-Age", "3600")
-		
+
 		// ✅ Gestisci richieste preflight OPTIONS
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		
+
 		h.ServeHTTP(w, r)
 	})
 }

@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath" // ✅ AGGIUNGI questo import
 	"syscall"
-	"path/filepath"  // ✅ AGGIUNGI questo import
-	"math/rand"
-	
+
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/globaltime"
@@ -29,7 +29,7 @@ func main() {
 
 func run() error {
 	rand.Seed(globaltime.Now().UnixNano())
-	
+
 	cfg, err := loadConfiguration()
 	if err != nil {
 		if errors.Is(err, conf.ErrHelpWanted) {
@@ -67,7 +67,7 @@ func run() error {
 		logger.Debug("database stopping")
 		_ = dbconn.Close()
 	}()
-	
+
 	db, err := database.New(dbconn)
 	if err != nil {
 		logger.WithError(err).Error("error creating AppDatabase")
