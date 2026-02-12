@@ -133,16 +133,15 @@ func (db *appdbimpl) ListUserConversations(
 			}
 		}
 
-		// Conta messaggi non letti (messaggi ricevuti ma non letti dall'utente corrente)
+		// Conta messaggi non letti (messaggi ricevuti ma non ancora letti dall'utente corrente)
 		var unreadCount int
 		err = db.c.QueryRowContext(ctx, `
 			SELECT COUNT(*)
-			FROM messages m
-			LEFT JOIN message_status ms ON ms.message_id = m.id AND ms.user_id = ?
-			WHERE m.chat_id = ? 
-			  AND m.sender_id <> ?
-			  AND (ms.status IS NULL OR ms.status IN ('sent', 'received'))
-		`, userID, conv.ID, userID).Scan(&unreadCount)
+			FROM messages
+			WHERE chat_id = ? 
+			  AND sender_id <> ?
+			  AND status IN ('sent', 'received')
+		`, conv.ID, userID).Scan(&unreadCount)
 		if err != nil {
 			return nil, fmt.Errorf("count unread messages: %w", err)
 		}
