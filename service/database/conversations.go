@@ -211,16 +211,18 @@ func (db *appdbimpl) ListConversationMessages(
 			CASE
 				WHEN m.sender_id = ? THEN
 					CASE
-						-- READ se almeno un altro membro ha read
-						WHEN EXISTS (
-							SELECT 1
-							FROM conversation_members cm
-							JOIN message_status ms
-							  ON ms.user_id = cm.user_id AND ms.message_id = m.id
-							WHERE cm.conversation_id = m.chat_id
-							  AND cm.user_id <> ?
-							  AND ms.status = 'read'
-						) THEN 'read'
+					    WHEN m.sender_id = ? THEN
+					        CASE
+					            -- ✅ READ solo se TUTTI gli altri membri hanno letto
+					            WHEN NOT EXISTS (
+					                SELECT 1
+					                FROM conversation_members cm
+					                LEFT JOIN message_status ms
+					                  ON ms.user_id = cm.user_id AND ms.message_id = m.id
+					                WHERE cm.conversation_id = m.chat_id
+					                  AND cm.user_id <> ?
+					                  AND (ms.status IS NULL OR ms.status <> 'read')
+					            ) THEN 'read'
 						-- RECEIVED se almeno un altro membro ha received
 						WHEN EXISTS (
 							SELECT 1
