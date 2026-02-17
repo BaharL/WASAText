@@ -678,7 +678,7 @@ async function onLeaveGroup() {
 function startAutoRefresh() {
   stopAutoRefresh()
   refreshInterval = setInterval(() => {
-    loadConversation({ forceScroll:false, markStatus:false })
+    loadConversation({ forceScroll:false, markStatus:true })
   }, 2500)
 }
 
