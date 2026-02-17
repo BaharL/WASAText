@@ -209,33 +209,31 @@ func (db *appdbimpl) ListConversationMessages(
 			m.forwarded_from_message_id,
 
 			CASE
-				WHEN m.sender_id = ? THEN
-					CASE
-					    WHEN m.sender_id = ? THEN
-					        CASE
-					            -- ✅ READ solo se TUTTI gli altri membri hanno letto
-					            WHEN NOT EXISTS (
-					                SELECT 1
-					                FROM conversation_members cm
-					                LEFT JOIN message_status ms
-					                  ON ms.user_id = cm.user_id AND ms.message_id = m.id
-					                WHERE cm.conversation_id = m.chat_id
-					                  AND cm.user_id <> ?
-					                  AND (ms.status IS NULL OR ms.status <> 'read')
-					            ) THEN 'read'
-						-- RECEIVED se almeno un altro membro ha received
-						WHEN EXISTS (
-							SELECT 1
-							FROM conversation_members cm
-							JOIN message_status ms
-							  ON ms.user_id = cm.user_id AND ms.message_id = m.id
-							WHERE cm.conversation_id = m.chat_id
-							  AND cm.user_id <> ?
-							  AND ms.status = 'received'
-						) THEN 'received'
-						ELSE 'sent'
-					END
-				ELSE 'sent'
+			    WHEN m.sender_id = ? THEN
+			        CASE
+			            -- ✅ READ solo se TUTTI gli altri membri hanno letto
+			            WHEN NOT EXISTS (
+			                SELECT 1
+			                FROM conversation_members cm
+			                LEFT JOIN message_status ms
+			                  ON ms.user_id = cm.user_id AND ms.message_id = m.id
+			                WHERE cm.conversation_id = m.chat_id
+			                  AND cm.user_id <> ?
+			                  AND (ms.status IS NULL OR ms.status <> 'read')
+			            ) THEN 'read'
+			            -- ✅ RECEIVED se almeno un membro ha received o read
+			            WHEN EXISTS (
+			                SELECT 1
+			                FROM conversation_members cm
+			                JOIN message_status ms
+			                  ON ms.user_id = cm.user_id AND ms.message_id = m.id
+			                WHERE cm.conversation_id = m.chat_id
+			                  AND cm.user_id <> ?
+			                  AND ms.status IN ('received', 'read')
+			            ) THEN 'received'
+			            ELSE 'sent'
+			        END
+			    ELSE 'sent'
 			END AS status,
 
 			datetime(m.created_at) AS created_at
